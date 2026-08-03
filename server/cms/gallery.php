@@ -17,11 +17,25 @@ if ($gallery === false) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
-    if (($_POST['do'] ?? '') === 'rename') {
+    $do = (string) ($_POST['do'] ?? '');
+
+    if ($do === 'rename') {
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name !== '' && mb_strlen($name) <= 100) {
             $pdo->prepare('UPDATE galleries SET name = ? WHERE id = ?')->execute([$name, $id]);
             flash_set('ok', 'Nome aggiornato');
+        }
+    } elseif ($do === 'settings') {
+        $transition = (string) ($_POST['transition_default'] ?? '');
+        $durationMs = (int) ($_POST['transition_duration_ms'] ?? -1);
+        if (!isset(TRANSITIONS[$transition])) {
+            flash_set('err', 'Transizione non valida');
+        } elseif ($durationMs < 0 || $durationMs > 10000) {
+            flash_set('err', 'Durata transizione non valida (0-10000 ms)');
+        } else {
+            $pdo->prepare('UPDATE galleries SET transition_default = ?, transition_duration_ms = ? WHERE id = ?')
+                ->execute([$transition, $durationMs, $id]);
+            flash_set('ok', 'Impostazioni di riproduzione salvate');
         }
     }
     redirect('gallery.php?id=' . $id);
@@ -45,6 +59,30 @@ cms_header($gallery['name'], 'galleries');
       <input type="text" name="name" maxlength="100" required value="<?= e($gallery['name']) ?>" aria-label="Nome galleria">
     </div>
     <button class="btn btn-sm" type="submit">Rinomina</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Riproduzione</h2>
+  <p class="hint">La transizione di default vale per tutti i media della galleria;
+  ogni file può fare override di entrata e uscita nella propria card.</p>
+  <form method="post" class="form-row">
+    <?= csrf_field() ?>
+    <input type="hidden" name="do" value="settings">
+    <div class="field">
+      <label for="transition_default">Transizione di default</label>
+      <select id="transition_default" name="transition_default">
+        <?php foreach (TRANSITIONS as $key => $label): ?>
+        <option value="<?= e($key) ?>"<?= $gallery['transition_default'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="field">
+      <label for="transition_duration_ms">Durata transizione (ms)</label>
+      <input type="number" id="transition_duration_ms" name="transition_duration_ms"
+             min="0" max="10000" step="50" value="<?= (int) $gallery['transition_duration_ms'] ?>">
+    </div>
+    <button class="btn" type="submit">Salva</button>
   </form>
 </div>
 
@@ -83,11 +121,37 @@ cms_header($gallery['name'], 'galleries');
             <option value="cover"<?= $m['fit'] === 'cover' ? ' selected' : '' ?>>Crop</option>
           </select>
         </div>
+        <div>
+          <label>Entrata</label>
+          <select data-media-field="transition_in">
+            <option value="">Default galleria</option>
+            <?php foreach (TRANSITIONS as $key => $label): ?>
+            <option value="<?= e($key) ?>"<?= $m['transition_in'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label>Uscita</label>
+          <select data-media-field="transition_out">
+            <option value="">Default galleria</option>
+            <?php foreach (TRANSITIONS as $key => $label): ?>
+            <option value="<?= e($key) ?>"<?= $m['transition_out'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
         <?php if ($m['type'] === 'image'): ?>
         <div class="full">
           <label>Durata a schermo (secondi)</label>
           <input type="number" min="1" max="3600" data-media-field="duration"
                  value="<?= (int) $m['duration_seconds'] ?>">
+        </div>
+        <?php else: ?>
+        <div class="full">
+          <label>Audio</label>
+          <select data-media-field="muted">
+            <option value="1"<?= (int) $m['muted'] === 1 ? ' selected' : '' ?>>Muto (solo video)</option>
+            <option value="0"<?= (int) $m['muted'] === 0 ? ' selected' : '' ?>>Con audio</option>
+          </select>
         </div>
         <?php endif; ?>
       </div>

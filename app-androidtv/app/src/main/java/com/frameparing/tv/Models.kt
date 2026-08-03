@@ -15,6 +15,10 @@ data class PlaylistItem(
     val rotation: Int,         // 0 | 90 | 180 | 270
     val fit: String,           // "contain" | "cover"
     val duration: Int,         // secondi a schermo (solo immagini)
+    val transitionIn: String,  // transizione di entrata, già risolta dal server
+    val transitionOut: String, // transizione di uscita, già risolta dal server
+    val transitionMs: Long,    // durata della transizione
+    val muted: Boolean,        // solo video: true = riproduci senza audio
 ) {
     val localName: String
         get() {
@@ -54,6 +58,11 @@ data class Playlist(
                             rotation = o.getInt("rotation"),
                             fit = o.getString("fit"),
                             duration = o.getInt("duration"),
+                            // opt*: playlist di server più vecchi restano valide
+                            transitionIn = o.optString("transition_in", "cut"),
+                            transitionOut = o.optString("transition_out", "cut"),
+                            transitionMs = o.optLong("transition_ms", 600L),
+                            muted = o.optBoolean("muted", true),
                         )
                     )
                 }

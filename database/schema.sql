@@ -61,6 +61,8 @@ CREATE TABLE `screens` (
 CREATE TABLE `galleries` (
   `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name`       VARCHAR(100) NOT NULL,
+  `transition_default`     VARCHAR(20)       NOT NULL DEFAULT 'cut', -- transizione di default dei media della galleria
+  `transition_duration_ms` SMALLINT UNSIGNED NOT NULL DEFAULT 600,   -- durata della transizione (0-10000 ms)
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -83,6 +85,9 @@ CREATE TABLE `media` (
   `rotation`         SMALLINT UNSIGNED NOT NULL DEFAULT 0,  -- 0 | 90 | 180 | 270
   `fit`              ENUM('contain','cover') NOT NULL DEFAULT 'contain', -- cover = crop a pieno schermo
   `duration_seconds` SMALLINT UNSIGNED NOT NULL DEFAULT 10, -- durata a schermo delle immagini (i video usano la propria)
+  `transition_in`    VARCHAR(20)   NULL,                    -- transizione di ENTRATA; NULL = default della galleria
+  `transition_out`   VARCHAR(20)   NULL,                    -- transizione di USCITA; NULL = default della galleria
+  `muted`            TINYINT(1)    NOT NULL DEFAULT 1,      -- solo video: 1 = muto (default vetrina), 0 = con audio
   `sort_order`       INT UNSIGNED  NOT NULL DEFAULT 0, -- posizione nel drag & drop
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

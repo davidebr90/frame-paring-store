@@ -105,6 +105,24 @@ switch ($action) {
             $fields[] = 'duration_seconds = ?';
             $params[] = $d;
         }
+        // Transizioni: stringa vuota = torna al default della galleria (NULL)
+        foreach (['transition_in', 'transition_out'] as $tField) {
+            if (isset($body[$tField])) {
+                $t = (string) $body[$tField];
+                if ($t !== '' && !isset(TRANSITIONS[$t])) {
+                    json_error('Transizione non valida', 422);
+                }
+                $fields[] = $tField . ' = ?';
+                $params[] = $t === '' ? null : $t;
+            }
+        }
+        if (isset($body['muted'])) {
+            if (!in_array((string) $body['muted'], ['0', '1'], true)) {
+                json_error('Valore audio non valido', 422);
+            }
+            $fields[] = 'muted = ?';
+            $params[] = (int) $body['muted'];
+        }
         if (!$fields) {
             json_error('Nessun campo da aggiornare', 422);
         }
