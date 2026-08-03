@@ -1,0 +1,42 @@
+<?php
+declare(strict_types=1);
+
+// GET /api/v1/media.php?id=N — download di un file multimediale.
+// Autenticazione: header "Authorization: Bearer <auth_token>".
+// Il file viene servito solo se appartiene a una galleria assegnata
+// allo schermo che lo richiede. Niente supporto Range: l'app scarica
+// i file in cache locale e li riproduce da lì, non in streaming.
+require __DIR__ . '/_api.php';
+
+$screen = require_device();
+
+$id = (int) ($_GET['id'] ?? 0);
+if ($id < 1) {
+    json_error('Parametro id mancante', 422);
+}
+
+$stmt = db()->prepare('SELECT m.filename, m.mime_type, m.filesize
+                       FROM media m
+                       JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
+                       WHERE m.id = ? AND sg.screen_id = ?
+                       LIMIT 1');
+$stmt->execute([$id, $screen['id']]);
+$media = $stmt->fetch();
+
+if ($media === false) {
+    json_error('Media non trovato o non assegnato a questo schermo', 404);
+}
+
+$path = UPLOADS_DIR . '/' . basename($media['filename']);
+if (!is_file($path)) {
+    json_error('File mancante sul server', 404);
+}
+
+if (function_exists('set_time_limit')) {
+    set_time_limit(0);
+}
+header('Content-Type: ' . $media['mime_type']);
+header('Content-Length: ' . filesize($path));
+header('Cache-Control: private, max-age=0');
+readfile($path);
+exit;

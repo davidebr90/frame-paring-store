@@ -37,6 +37,8 @@ CREATE TABLE `screens` (
   `name`             VARCHAR(100)  NOT NULL DEFAULT 'Nuovo schermo',
   `pairing_code`     CHAR(6)       NULL,               -- PIN mostrato sulla TV (anche dentro il QR), azzerato dopo il pairing
   `pairing_expires_at` DATETIME    NULL,               -- scadenza del PIN/QR
+  `poll_token`       CHAR(64)      NULL,               -- segreto noto solo al dispositivo richiedente: serve a
+                                                       -- ritirare l'auth_token (il PIN da solo non basta)
   `claim_token`      CHAR(64)      NULL,               -- token della URL dedicata (metodo manuale), azzerato dopo l'uso
   `pair_method`      ENUM('pin','qr','manual') NULL,   -- come è avvenuto il pairing (NULL finché pending)
   `auth_token`       CHAR(64)      NULL,               -- token segreto rilasciato al pairing (hex 256 bit)
@@ -46,6 +48,7 @@ CREATE TABLE `screens` (
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_screens_pairing_code` (`pairing_code`),
+  UNIQUE KEY `uq_screens_poll_token` (`poll_token`),
   UNIQUE KEY `uq_screens_claim_token` (`claim_token`),
   UNIQUE KEY `uq_screens_auth_token` (`auth_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
