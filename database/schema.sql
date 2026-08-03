@@ -21,15 +21,24 @@ CREATE TABLE `users` (
 
 -- ------------------------------------------------------------
 -- Schermi (dispositivi Android TV / Fire Stick)
--- Ciclo di vita: la TV genera un PIN e chiama l'API ->
--- riga creata con status 'pending'; l'admin inserisce il PIN
--- nel CMS -> status 'paired' e rilascio dell'auth_token.
+--
+-- Tre metodi di pairing, tutti convergono su auth_token:
+--  1) PIN: la TV chiama l'API -> riga 'pending' con pairing_code
+--     a 6 cifre mostrato a schermo; l'admin lo digita nel CMS.
+--  2) QR: stesso flusso del PIN, ma la TV mostra anche un QR
+--     che apre il CMS con il codice precompilato (si scansiona
+--     col telefono e si conferma da lì). Nessun campo in più.
+--  3) Manuale: l'admin crea lo schermo nel CMS PRIMA, ottiene
+--     una URL dedicata contenente claim_token; la si inserisce
+--     nelle impostazioni dell'app e la TV si autorizza da sola.
 -- ------------------------------------------------------------
 CREATE TABLE `screens` (
   `id`               INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `name`             VARCHAR(100)  NOT NULL DEFAULT 'Nuovo schermo',
-  `pairing_code`     CHAR(6)       NULL,               -- PIN mostrato sulla TV, azzerato dopo il pairing
-  `pairing_expires_at` DATETIME    NULL,               -- scadenza del PIN
+  `pairing_code`     CHAR(6)       NULL,               -- PIN mostrato sulla TV (anche dentro il QR), azzerato dopo il pairing
+  `pairing_expires_at` DATETIME    NULL,               -- scadenza del PIN/QR
+  `claim_token`      CHAR(64)      NULL,               -- token della URL dedicata (metodo manuale), azzerato dopo l'uso
+  `pair_method`      ENUM('pin','qr','manual') NULL,   -- come è avvenuto il pairing (NULL finché pending)
   `auth_token`       CHAR(64)      NULL,               -- token segreto rilasciato al pairing (hex 256 bit)
   `status`           ENUM('pending','paired','revoked') NOT NULL DEFAULT 'pending',
   `device_info`      VARCHAR(255)  NULL,               -- modello/OS dichiarati dall'app
@@ -37,6 +46,7 @@ CREATE TABLE `screens` (
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_screens_pairing_code` (`pairing_code`),
+  UNIQUE KEY `uq_screens_claim_token` (`claim_token`),
   UNIQUE KEY `uq_screens_auth_token` (`auth_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
