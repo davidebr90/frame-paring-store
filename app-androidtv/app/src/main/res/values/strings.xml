@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Frame Paring</string>
+    <string name="setup_title">FRAME PARING</string>
+    <string name="setup_subtitle">Configurazione schermo</string>
+    <string name="server_hint">URL del server (es. https://tuodominio.it/signage)</string>
+    <string name="start_pairing">Genera codice di pairing</string>
+    <string name="pairing_wait">Inserisci questo codice nel CMS, oppure scansiona il QR</string>
+    <string name="pairing_expired">Codice scaduto, ne sto generando uno nuovo…</string>
+    <string name="manual_title">Configurazione manuale</string>
+    <string name="manual_hint">URL di configurazione dal CMS (claim.php?token=…)</string>
+    <string name="manual_go">Configura</string>
+    <string name="status_connecting">Connessione al server…</string>
+    <string name="status_error">Server non raggiungibile, riprovo…</string>
+    <string name="status_syncing">Scaricamento contenuti…</string>
+    <string name="status_empty">Nessun contenuto assegnato a questo schermo</string>
+    <string name="status_revoked">Accesso revocato dal CMS: nuovo pairing necessario</string>
+</resources>
