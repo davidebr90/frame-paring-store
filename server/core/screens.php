@@ -43,20 +43,30 @@ function create_pending_screen(?string $deviceInfo): array
 }
 
 // Chiamata dal CMS quando l'admin inserisce il PIN (o conferma via QR).
-// Genera l'auth_token; il dispositivo lo ritirerà al prossimo polling.
-function confirm_pairing(string $code, string $method): bool
+// Genera l'auth_token (il dispositivo lo ritirerà al prossimo polling)
+// e restituisce l'id dello schermo, oppure null se il codice non è valido.
+function confirm_pairing(string $code, string $method): ?int
 {
-    $stmt = db()->prepare("UPDATE screens
-                           SET status = 'paired',
-                               auth_token = ?,
-                               pair_method = ?,
-                               pairing_expires_at = NULL
+    $pdo = db();
+    $stmt = $pdo->prepare("SELECT id FROM screens
                            WHERE pairing_code = ?
                              AND status = 'pending'
                              AND pairing_expires_at >= NOW()");
-    $stmt->execute([random_hex(), $method, $code]);
+    $stmt->execute([$code]);
+    $id = $stmt->fetchColumn();
+    if ($id === false) {
+        return null;
+    }
 
-    return $stmt->rowCount() === 1;
+    $pdo->prepare("UPDATE screens
+                   SET status = 'paired',
+                       auth_token = ?,
+                       pair_method = ?,
+                       pairing_expires_at = NULL
+                   WHERE id = ?")
+        ->execute([random_hex(), $method, $id]);
+
+    return (int) $id;
 }
 
 // Playlist di uno schermo: gallerie assegnate in ordine, media in sort_order.

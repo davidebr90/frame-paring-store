@@ -1,0 +1,28 @@
+<?php
+declare(strict_types=1);
+
+// Anteprima media per il CMS (sessione admin). La cartella uploads è
+// chiusa al web: questo è l'unico modo per vedere i file dal browser.
+require __DIR__ . '/_cms.php';
+
+$id = (int) ($_GET['id'] ?? 0);
+$stmt = db()->prepare('SELECT filename, mime_type FROM media WHERE id = ?');
+$stmt->execute([$id]);
+$media = $stmt->fetch();
+
+if ($media === false) {
+    http_response_code(404);
+    exit;
+}
+
+$path = UPLOADS_DIR . '/' . basename($media['filename']);
+if (!is_file($path)) {
+    http_response_code(404);
+    exit;
+}
+
+header('Content-Type: ' . $media['mime_type']);
+header('Content-Length: ' . filesize($path));
+header('Cache-Control: private, max-age=86400');
+readfile($path);
+exit;

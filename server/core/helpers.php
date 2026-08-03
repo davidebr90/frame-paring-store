@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+function e(?string $s): string
+{
+    return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+}
+
+function redirect(string $to): void
+{
+    header('Location: ' . $to);
+    exit;
+}
+
 function json_out(array $data, int $status = 200): void
 {
     http_response_code($status);

@@ -10,8 +10,8 @@ SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
 
-# I file del core non devono essere raggiungibili via web
-<FilesMatch "^(config|config\.sample|bootstrap|db|helpers|screens)\.php$">
+# I file di supporto (prologhi con underscore) non sono endpoint
+<FilesMatch "^_.*\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
