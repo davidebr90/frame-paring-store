@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Frame Paring</string>
-    <string name="setup_title">FRAME PARING</string>
+    <string name="app_name">Frame Paring Store</string>
+    <string name="setup_title">FRAME PARING STORE</string>
     <string name="setup_subtitle">Configurazione schermo</string>
     <string name="server_hint">URL del server (es. https://tuodominio.it/signage)</string>
     <string name="start_pairing">Genera codice di pairing</string>

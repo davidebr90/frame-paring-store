@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="auth-body">
 <div class="auth-card">
-  <div class="auth-brand"><span class="brand-led"></span>FRAME<b>PARING</b></div>
+  <div class="auth-brand"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></div>
   <p class="auth-sub">Digital signage — pannello di controllo</p>
   <?php if ($error): ?><div class="flash flash-err"><?= e($error) ?></div><?php endif; ?>
   <form method="post">

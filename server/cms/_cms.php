@@ -78,7 +78,7 @@ function cms_header(string $title, string $active = ''): void
 <body>
 <div class="shell">
 <aside class="side">
-  <a class="brand" href="index.php"><span class="brand-led"></span>FRAME<b>PARING</b></a>
+  <a class="brand" href="index.php"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></a>
   <nav class="nav">
     <?php foreach ($nav as $key => [$href, $label, $icon]): ?>
     <a href="<?= $href ?>" class="nav-link<?= $key === $active ? ' active' : '' ?>">
