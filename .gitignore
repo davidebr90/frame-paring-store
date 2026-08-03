@@ -1,0 +1,19 @@
+# Config con credenziali reali (si committa solo config.sample.php)
+server/core/config.php
+
+# Media caricati dal CMS
+server/uploads/*
+!server/uploads/.gitkeep
+!server/uploads/.htaccess
+
+# Android / Gradle
+app-androidtv/.gradle/
+app-androidtv/build/
+app-androidtv/app/build/
+app-androidtv/local.properties
+app-androidtv/.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
