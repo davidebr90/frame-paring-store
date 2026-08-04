@@ -331,7 +331,7 @@
     var select = ev.target.closest('[data-role-select]');
     if (!select) { return; }
     var form = select.closest('form');
-    var caps = form.querySelector('[data-caps]');
+    var caps = form.querySelector('[data-caps]') || form.querySelector('.caps-block');
     var note = form.querySelector('[data-admin-note]');
     var isAdmin = select.value === 'admin';
     if (caps) { caps.hidden = isAdmin; }

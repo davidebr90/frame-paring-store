@@ -22,6 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_set('err', 'Nome non valido (1-100 caratteri)');
     } elseif ($do === 'delete') {
         $id = (int) ($_POST['id'] ?? 0);
+
+        // Le gallerie di sistema non si eliminano: sono referenziate dal
+        // funzionamento del CMS (es. immagini di cortesia degli schermi)
+        $stmt = $pdo->prepare('SELECT system_key FROM galleries WHERE id = ?');
+        $stmt->execute([$id]);
+        if ($stmt->fetchColumn()) {
+            flash_set('err', 'Questa è una galleria di sistema e non può essere eliminata. Puoi però eliminarne i singoli file.');
+            redirect('galleries.php');
+        }
+
         // Elimina prima i file da disco, poi la riga (cascade sui media)
         $stmt = $pdo->prepare('SELECT filename FROM media WHERE gallery_id = ?');
         $stmt->execute([$id]);
@@ -55,11 +65,15 @@ cms_header('Gallerie', 'galleries');
     <h1>Gallerie</h1>
     <div class="sub"><?= count($galleries) ?> gallerie</div>
   </div>
+  <?php if (current_can('gallery.manage')): ?>
+  <a class="btn btn-primary" href="gallery_new.php">+ Nuova galleria</a>
+  <?php endif; ?>
 </div>
 
 <?php if (current_can('gallery.manage')): ?>
 <div class="card">
-  <h2>Nuova galleria</h2>
+  <h2>Crea rapidamente</h2>
+  <p class="hint">Per impostare anche transizione e durata usa <a href="gallery_new.php">Nuova galleria</a>.</p>
   <form method="post" class="form-row">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="create">
@@ -83,14 +97,18 @@ cms_header('Gallerie', 'galleries');
     <tbody>
     <?php foreach ($galleries as $g): ?>
       <tr>
-        <td><strong><?= e($g['name']) ?></strong></td>
+        <td><strong><?= e($g['name']) ?></strong>
+          <?php if ($g['system_key'] !== null): ?>
+          <span class="badge badge-system" title="Galleria di servizio del sistema">sistema</span>
+          <?php endif; ?>
+        </td>
         <td><?= (int) $g['n_media'] ?></td>
         <td><?= human_bytes((int) $g['bytes']) ?></td>
         <td><?= (int) $g['n_screens'] ?></td>
         <td class="hint"><?= date('d/m/Y H:i', strtotime($g['updated_at'])) ?></td>
         <td style="text-align:right;white-space:nowrap">
           <a class="btn btn-sm" href="gallery.php?id=<?= (int) $g['id'] ?>">Apri</a>
-          <?php if (current_can('gallery.manage')): ?>
+          <?php if (current_can('gallery.manage') && $g['system_key'] === null): ?>
           <form method="post" style="display:inline"
                 onsubmit="return confirm('Eliminare la galleria e tutti i suoi file?')">
             <?= csrf_field() ?>

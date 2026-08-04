@@ -82,14 +82,84 @@ function human_bytes(int $bytes): string
 function cms_header(string $title, string $active = ''): void
 {
     $user = current_user();
-    // Voce mostrata solo se l'utente ha la capability corrispondente
-    $nav = array_filter([
-        'index'     => ['index.php', 'Dashboard', 'M3 5h18v11H3zM8 20h8', null],
-        'screens'   => ['screens.php', 'Schermi', 'M2 6h20v12H2zM12 18v3M8 21h8', 'screen.manage'],
-        'galleries' => ['galleries.php', 'Gallerie', 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z', null],
-        'pair'      => ['pair.php', 'Pairing', 'M7 12h10M12 7v10M12 2a10 10 0 100 20 10 10 0 000-20z', 'screen.pair'],
-        'users'     => ['users.php', 'Utenti', 'M16 20v-2a4 4 0 00-8 0v2M12 12a4 4 0 100-8 4 4 0 000 8z', 'users.manage'],
-    ], fn (array $item): bool => $item[3] === null || current_can($item[3]));
+
+    // Struttura del menu: sezioni con sottovoci, ognuna filtrata per
+    // capability. Una sezione sparisce se nessuna sua voce è accessibile.
+    $navSections = [
+        [
+            'key'   => 'index',
+            'href'  => 'index.php',
+            'label' => 'Dashboard',
+            'icon'  => 'M3 5h18v11H3zM8 20h8',
+            'cap'   => null,
+            'items' => [],
+        ],
+        [
+            'key'   => 'screens',
+            'href'  => 'screens.php',
+            'label' => 'Schermi',
+            'icon'  => 'M2 6h20v12H2zM12 18v3M8 21h8',
+            'cap'   => null,
+            'items' => [
+                ['key' => 'screens',     'href' => 'screens.php',    'label' => 'Elenco schermi',  'cap' => 'screen.manage'],
+                ['key' => 'screens.new', 'href' => 'screen_new.php', 'label' => 'Aggiungi schermo', 'cap' => 'screen.manage'],
+                ['key' => 'pair',        'href' => 'pair.php',       'label' => 'Associa con PIN',  'cap' => 'screen.pair'],
+            ],
+        ],
+        [
+            'key'   => 'content',
+            'href'  => 'galleries.php',
+            'label' => 'Contenuti',
+            'icon'  => 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',
+            'cap'   => null,
+            'items' => [
+                ['key' => 'galleries',     'href' => 'galleries.php',   'label' => 'Gallerie',        'cap' => null],
+                ['key' => 'galleries.new', 'href' => 'gallery_new.php', 'label' => 'Nuova galleria',  'cap' => 'gallery.manage'],
+            ],
+        ],
+        [
+            'key'   => 'users',
+            'href'  => 'users.php',
+            'label' => 'Utenti',
+            'icon'  => 'M16 20v-2a4 4 0 00-8 0v2M12 12a4 4 0 100-8 4 4 0 000 8z',
+            'cap'   => 'users.manage',
+            'items' => [
+                ['key' => 'users',     'href' => 'users.php',    'label' => 'Lista utenti', 'cap' => 'users.manage'],
+                ['key' => 'users.new', 'href' => 'user_new.php', 'label' => 'Crea utente',  'cap' => 'users.manage'],
+            ],
+        ],
+        [
+            'key'   => 'account',
+            'href'  => 'profile.php',
+            'label' => 'Account',
+            'icon'  => 'M12 12a4 4 0 100-8 4 4 0 000 8zM6 21v-2a6 6 0 0112 0v2',
+            'cap'   => null,
+            'items' => [
+                ['key' => 'profile', 'href' => 'profile.php', 'label' => 'Il mio profilo', 'cap' => null],
+            ],
+        ],
+    ];
+
+    // Filtro per permessi
+    $nav = [];
+    foreach ($navSections as $section) {
+        if ($section['cap'] !== null && !current_can($section['cap'])) {
+            continue;
+        }
+        $section['items'] = array_values(array_filter(
+            $section['items'],
+            fn (array $i): bool => $i['cap'] === null || current_can($i['cap'])
+        ));
+        // Sezione con sottovoci ma nessuna accessibile: si nasconde
+        if ($section['items'] === [] && $section['key'] !== 'index') {
+            continue;
+        }
+        // Il link della sezione punta alla prima voce realmente accessibile
+        if ($section['items'] !== []) {
+            $section['href'] = $section['items'][0]['href'];
+        }
+        $nav[] = $section;
+    }
     ?><!doctype html>
 <html lang="it">
 <head>
@@ -107,11 +177,23 @@ function cms_header(string $title, string $active = ''): void
 <aside class="side">
   <a class="brand" href="index.php"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></a>
   <nav class="nav">
-    <?php foreach ($nav as $key => [$href, $label, $icon, $cap]): ?>
-    <a href="<?= $href ?>" class="nav-link<?= $key === $active ? ' active' : '' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="<?= $icon ?>"/></svg>
-      <span><?= $label ?></span>
+    <?php foreach ($nav as $section):
+        // La sezione è attiva se lo è una delle sue voci
+        $sectionActive = $active === $section['key']
+            || str_starts_with($active, $section['key'] . '.')
+            || in_array($active, array_column($section['items'], 'key'), true);
+    ?>
+    <a href="<?= $section['href'] ?>" class="nav-link<?= $sectionActive ? ' active' : '' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="<?= $section['icon'] ?>"/></svg>
+      <span><?= $section['label'] ?></span>
     </a>
+    <?php if ($section['items'] && $sectionActive): ?>
+    <div class="nav-sub">
+      <?php foreach ($section['items'] as $item): ?>
+      <a href="<?= $item['href'] ?>" class="<?= $active === $item['key'] ? 'active' : '' ?>"><?= $item['label'] ?></a>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
     <?php endforeach; ?>
   </nav>
   <div class="side-foot">

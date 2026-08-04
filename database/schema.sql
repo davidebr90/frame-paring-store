@@ -82,9 +82,11 @@ CREATE TABLE `galleries` (
   `name`       VARCHAR(100) NOT NULL,
   `transition_default`     VARCHAR(20)       NOT NULL DEFAULT 'cut', -- transizione di default dei media della galleria
   `transition_duration_ms` SMALLINT UNSIGNED NOT NULL DEFAULT 600,   -- durata della transizione (0-10000 ms)
+  `system_key` VARCHAR(40) NULL,                                     -- galleria di servizio (es. 'courtesy'): non eliminabile né rinominabile
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_galleries_system_key` (`system_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------

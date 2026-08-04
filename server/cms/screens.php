@@ -36,6 +36,7 @@ cms_header('Schermi', 'screens');
     <h1>Schermi</h1>
     <div class="sub"><?= count($screens) ?> registrati</div>
   </div>
+  <a class="btn btn-primary" href="screen_new.php">+ Aggiungi schermo</a>
 </div>
 
 <div class="card">

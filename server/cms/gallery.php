@@ -21,6 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $do = (string) ($_POST['do'] ?? '');
 
     if ($do === 'rename') {
+        if ($gallery['system_key'] !== null) {
+            flash_set('err', 'Le gallerie di sistema non si possono rinominare');
+            redirect('gallery.php?id=' . $id);
+        }
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name !== '' && mb_strlen($name) <= 100) {
             $pdo->prepare('UPDATE galleries SET name = ? WHERE id = ?')->execute([$name, $id]);
@@ -53,6 +57,7 @@ cms_header($gallery['name'], 'galleries');
     <h1><?= e($gallery['name']) ?></h1>
     <div class="sub"><?= count($media) ?> file · trascina le anteprime per ordinare</div>
   </div>
+  <?php if ($gallery['system_key'] === null): ?>
   <form method="post" class="form-row">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="rename">
@@ -61,6 +66,9 @@ cms_header($gallery['name'], 'galleries');
     </div>
     <button class="btn btn-sm" type="submit">Rinomina</button>
   </form>
+  <?php else: ?>
+  <span class="badge badge-system">galleria di sistema</span>
+  <?php endif; ?>
 </div>
 
 <div class="card">

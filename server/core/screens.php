@@ -146,16 +146,19 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
     return ['id' => $newId, 'label' => $originalName];
 }
 
-// Galleria di servizio per le immagini di cortesia (creata al primo uso).
+// Galleria di servizio per le immagini di cortesia. Identificata dal
+// system_key (non dal nome, che l'utente potrebbe cambiare) e protetta da
+// rinomina/eliminazione nel CMS. Creata al primo uso.
 function courtesy_gallery_id(): int
 {
     $pdo = db();
-    $id = $pdo->query("SELECT id FROM galleries WHERE name = 'Immagini di cortesia' LIMIT 1")
+    $id = $pdo->query("SELECT id FROM galleries WHERE system_key = 'courtesy' LIMIT 1")
         ->fetchColumn();
     if ($id !== false) {
         return (int) $id;
     }
-    $pdo->prepare('INSERT INTO galleries (name) VALUES (?)')->execute(['Immagini di cortesia']);
+    $pdo->prepare("INSERT INTO galleries (name, system_key) VALUES (?, 'courtesy')")
+        ->execute(['Immagini di cortesia']);
     return (int) $pdo->lastInsertId();
 }
 

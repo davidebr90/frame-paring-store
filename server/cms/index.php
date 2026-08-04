@@ -85,6 +85,7 @@ cms_header('Dashboard', 'index');
         <?= screen_badge($s, $onlineWindow) ?>
         <span class="hint"><?= $s['last_seen_at'] ? 'visto ' . date('d/m H:i', strtotime($s['last_seen_at'])) : 'mai visto' ?></span>
       </div>
+      <?php // il footer resta ancorato in basso anche con card di altezza diversa ?>
       <?php if (current_can('screen.manage')): ?>
       <a class="cover" href="screen.php?id=<?= (int) $s['id'] ?>" aria-label="Gestisci <?= e($s['name']) ?>"></a>
       <?php endif; ?>
