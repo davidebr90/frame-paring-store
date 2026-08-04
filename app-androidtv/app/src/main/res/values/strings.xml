@@ -7,6 +7,8 @@
     <string name="start_pairing">Genera codice di pairing</string>
     <string name="pairing_wait">Inserisci questo codice nel CMS, oppure scansiona il QR</string>
     <string name="pairing_expired">Codice scaduto, ne sto generando uno nuovo…</string>
+    <string name="pairing_countdown">Il codice si rinnova tra %1$d:%2$02d</string>
+    <string name="pairing_renewing">Rinnovo del codice in corso…</string>
     <string name="manual_title">Configurazione manuale</string>
     <string name="manual_hint">URL di configurazione dal CMS (claim.php?token=…)</string>
     <string name="manual_go">Configura</string>
@@ -18,6 +20,9 @@
     <string name="autostart_title">Avvio automatico</string>
     <string name="autostart_hint">Su questo dispositivo serve un permesso per far ripartire l\'app da sola all\'accensione. Si attiva una volta sola.</string>
     <string name="autostart_button">Attiva avvio automatico</string>
+    <string name="autostart_switch">Avvio automatico all\'accensione</string>
+    <string name="autostart_on">Attivo</string>
+    <string name="autostart_off">Non attivo — tocca per concedere il permesso</string>
     <string name="autostart_done">Avvio automatico attivo: l\'app ripartirà da sola all\'accensione</string>
     <string name="autostart_manual">Apri Impostazioni → App → Frame Paring Store e attiva "Mostra sopra altre app"</string>
     <string name="settings_title">Impostazioni schermo</string>

@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Da Android 10 il sistema blocca le activity avviate dal background:
+         senza questa dichiarazione l'app non comparirebbe nemmeno nella
+         schermata "Mostra sopra altre app" e l'avvio al boot fallirebbe -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Stessa APK per Android TV e Fire OS: nessun requisito hardware bloccante -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

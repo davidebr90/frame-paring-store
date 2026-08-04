@@ -168,9 +168,15 @@ cms_header($user['full_name'] ?: $user['username'], 'users');
       </div>
       <div class="field">
         <label>Stato account</label>
-        <label class="check-inline">
-          <input type="checkbox" name="is_active" value="1"<?= $user['is_active'] ? ' checked' : '' ?>>
-          Account attivo (può accedere al CMS)
+        <label class="switch">
+          <input type="checkbox" name="is_active" value="1"<?= $user['is_active'] ? ' checked' : '' ?> data-switch>
+          <span class="switch-track"></span>
+          <span class="switch-label">
+            <span>Accesso al CMS</span>
+            <span class="switch-state" data-switch-state
+                  data-on="Attivo: può accedere" data-off="Disattivato: non può accedere"><?=
+              $user['is_active'] ? 'Attivo: può accedere' : 'Disattivato: non può accedere' ?></span>
+          </span>
         </label>
       </div>
     </div>

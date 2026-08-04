@@ -63,6 +63,8 @@ class MainActivity : Activity() {
     private lateinit var playerStatus: TextView
     private lateinit var settingsPanel: View
     private lateinit var settingsServerInput: EditText
+    private lateinit var pairProgress: android.widget.ProgressBar
+    private lateinit var pairCountdown: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,6 +91,8 @@ class MainActivity : Activity() {
         playerStatus = findViewById(R.id.playerStatus)
         settingsPanel = findViewById(R.id.settingsPanel)
         settingsServerInput = findViewById(R.id.settingsServerInput)
+        pairProgress = findViewById(R.id.pairProgress)
+        pairCountdown = findViewById(R.id.pairCountdown)
 
         findViewById<Button>(R.id.settingsSaveButton).setOnClickListener { saveServerFromSettings() }
         findViewById<Button>(R.id.settingsCloseButton).setOnClickListener { closeSettings() }
@@ -97,7 +101,11 @@ class MainActivity : Activity() {
         serverInput.setText(prefs.baseUrl ?: BuildConfig.DEFAULT_BASE_URL)
         findViewById<Button>(R.id.pairButton).setOnClickListener { startPairing() }
         findViewById<Button>(R.id.claimButton).setOnClickListener { startClaim() }
-        findViewById<Button>(R.id.autostartButton).setOnClickListener { requestAutostartPermission() }
+        // Interruttore: mostra lo stato reale del permesso, non solo un'azione.
+        // Spegnerlo dall'app non è possibile (lo revoca il sistema), quindi
+        // in quel caso si accompagna l'utente alla schermata di sistema.
+        findViewById<android.widget.Switch>(R.id.autostartSwitch)
+            .setOnClickListener { requestAutostartPermission() }
 
         if (prefs.authToken != null) enterPlayerMode() else showPairingPanel()
     }
@@ -219,14 +227,24 @@ class MainActivity : Activity() {
 
     private fun refreshAutostartPanel() {
         val panel = findViewById<View>(R.id.autostartPanel)
-        val needed = autostartPermissionNeeded()
-        panel.visibility = if (needed) View.VISIBLE else View.GONE
-        if (!needed) {
+        val switch = findViewById<android.widget.Switch>(R.id.autostartSwitch)
+        val granted = !autostartPermissionNeeded()
+
+        // Il pannello resta visibile sempre: così si vede anche che è "acceso"
+        panel.visibility = View.VISIBLE
+        switch.isChecked = granted
+        findViewById<TextView>(R.id.autostartState).setText(
+            if (granted) R.string.autostart_on else R.string.autostart_off
+        )
+        findViewById<TextView>(R.id.autostartState)
+            .setTextColor(if (granted) 0xFF3ECF6E.toInt() else 0xFF8B93A2.toInt())
+
+        if (granted) {
             findViewById<View>(R.id.playerAutostartButton).visibility = View.GONE
-        }
-        if (!needed && autostartRequested) {
-            autostartRequested = false
-            toast(getString(R.string.autostart_done))
+            if (autostartRequested) {
+                autostartRequested = false
+                toast(getString(R.string.autostart_done))
+            }
         }
     }
 
@@ -329,12 +347,23 @@ class MainActivity : Activity() {
                 qrImage.setImageBitmap(QrCode.render(start.qrUrl, 512))
                 pairStatus.setText(R.string.pairing_wait)
 
-                // Polling fitto (4s) finché il PIN è valido: la conferma
-                // dell'admin deve riflettersi subito sulla TV
-                val deadline = SystemClock.elapsedRealtime() + start.expiresIn * 1_000L
+                // Battito al secondo per il conto alla rovescia, con
+                // interrogazione del server ogni 4 tick: chi guarda lo schermo
+                // vede che il sistema è vivo e quanto vale ancora il codice
+                val totalMs = start.expiresIn * 1_000L
+                val deadline = SystemClock.elapsedRealtime() + totalMs
                 var paired: ApiClient.PairState.Paired? = null
-                while (isActive && SystemClock.elapsedRealtime() < deadline) {
-                    delay(4_000)
+                var tick = 0
+
+                while (isActive) {
+                    val remainingMs = deadline - SystemClock.elapsedRealtime()
+                    if (remainingMs <= 0) break
+                    updateCountdown(remainingMs, totalMs)
+
+                    delay(1_000)
+                    tick++
+                    if (tick % 4 != 0) continue
+
                     val state = runCatching {
                         ApiClient.pairStatus(base, start.pollToken)
                     }.getOrNull() ?: continue
@@ -349,9 +378,25 @@ class MainActivity : Activity() {
                     onPaired(paired)
                     return@launch
                 }
-                pairStatus.setText(R.string.pairing_expired)
+                showRenewing()
             }
         }
+    }
+
+    // Conto alla rovescia della validità del codice
+    private fun updateCountdown(remainingMs: Long, totalMs: Long) {
+        val seconds = (remainingMs / 1000).toInt()
+        pairCountdown.text = getString(R.string.pairing_countdown, seconds / 60, seconds % 60)
+        pairProgress.progress = ((remainingMs * 1000) / totalMs).toInt().coerceIn(0, 1000)
+        pairProgress.visibility = View.VISIBLE
+        pairCountdown.visibility = View.VISIBLE
+    }
+
+    // Il codice è scaduto: si sta chiedendo il successivo al server
+    private fun showRenewing() {
+        pairStatus.setText(R.string.pairing_renewing)
+        pairProgress.progress = 0
+        pairCountdown.visibility = View.GONE
     }
 
     // ---------- configurazione manuale (URL dedicata) ----------

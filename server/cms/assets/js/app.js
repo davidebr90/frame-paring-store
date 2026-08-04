@@ -348,6 +348,16 @@
     });
   }
 
+  /* ---------- Interruttori: la didascalia segue lo stato ---------- */
+  document.addEventListener('change', function (ev) {
+    var input = ev.target.closest('[data-switch]');
+    if (!input) { return; }
+    var state = input.closest('.switch').querySelector('[data-switch-state]');
+    if (state) {
+      state.textContent = input.checked ? state.dataset.on : state.dataset.off;
+    }
+  });
+
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');
   if (pin) {

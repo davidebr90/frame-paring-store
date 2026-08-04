@@ -152,7 +152,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center_horizontal"
-            android:padding="48dp">
+            android:padding="32dp">
 
             <TextView
                 android:id="@+id/brandTitle"
@@ -171,7 +171,7 @@
                 android:text="@string/setup_subtitle"
                 android:textColor="#8B93A2"
                 android:textSize="15sp"
-                android:layout_marginBottom="28dp" />
+                android:layout_marginBottom="20dp" />
 
             <!-- Fase 1: scelta server -->
             <LinearLayout
@@ -215,26 +215,45 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="#FFB224"
-                    android:textSize="72sp"
+                    android:textSize="62sp"
                     android:textStyle="bold"
                     android:typeface="monospace"
                     android:letterSpacing="0.3" />
 
                 <ImageView
                     android:id="@+id/qrImage"
-                    android:layout_width="220dp"
-                    android:layout_height="220dp"
-                    android:layout_marginTop="20dp"
+                    android:layout_width="184dp"
+                    android:layout_height="184dp"
+                    android:layout_marginTop="14dp"
                     android:contentDescription="@string/pairing_wait" />
 
                 <TextView
                     android:id="@+id/pairStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
+                    android:layout_marginTop="12dp"
                     android:text="@string/pairing_wait"
                     android:textColor="#8B93A2"
                     android:textSize="16sp" />
+
+                <!-- Validità del codice: barra + conto alla rovescia -->
+                <ProgressBar
+                    android:id="@+id/pairProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="184dp"
+                    android:layout_height="4dp"
+                    android:layout_marginTop="12dp"
+                    android:max="1000"
+                    android:progress="1000" />
+
+                <TextView
+                    android:id="@+id/pairCountdown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="#5A6272"
+                    android:textSize="14sp"
+                    android:typeface="monospace" />
             </LinearLayout>
 
             <!-- Configurazione manuale (sempre disponibile sotto) -->
@@ -297,13 +316,22 @@
                     android:textColor="#8B93A2"
                     android:textSize="14sp" />
 
-                <Button
-                    android:id="@+id/autostartButton"
+                <Switch
+                    android:id="@+id/autostartSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:paddingVertical="10dp"
+                    android:text="@string/autostart_switch"
+                    android:textColor="#E9EBEE"
+                    android:textSize="16sp"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/autostartState"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/autostart_button"
-                    android:textStyle="bold" />
+                    android:textSize="14sp" />
             </LinearLayout>
 
         </LinearLayout>
