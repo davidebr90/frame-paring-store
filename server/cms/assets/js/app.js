@@ -338,6 +338,16 @@
     if (note) { note.hidden = !isAdmin; }
   });
 
+  /* ---------- Personalizzazione: color picker e campo esadecimale ---------- */
+  var accentPicker = document.getElementById('brand_accent_picker');
+  var accentText = document.getElementById('brand_accent');
+  if (accentPicker && accentText) {
+    accentPicker.addEventListener('input', function () { accentText.value = accentPicker.value; });
+    accentText.addEventListener('input', function () {
+      if (/^#[0-9a-fA-F]{6}$/.test(accentText.value)) { accentPicker.value = accentText.value; }
+    });
+  }
+
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');
   if (pin) {

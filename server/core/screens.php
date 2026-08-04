@@ -306,6 +306,11 @@ function playlist_for_screen(array $screen): array
             'idle_mode' => $screen['idle_mode'],
             'idle_item' => $idleItem,
         ],
+        'branding' => [
+            'title'    => branding_tv_title(),
+            'subtitle' => branding('brand_tv_subtitle'),
+            'accent'   => branding_accent(),
+        ],
         // La version copre TUTTO ciò che il player deve rispettare: media,
         // fasce orarie e riposo. Se cambia solo la programmazione, la TV
         // deve comunque accorgersene al primo polling.

@@ -14,6 +14,9 @@ app-androidtv/local.properties
 app-androidtv/.idea/
 *.iml
 
+# Stato locale dell'installazione
+server/core/uninstalled.lock
+
 # OS
 .DS_Store
 Thumbs.db

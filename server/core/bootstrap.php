@@ -11,6 +11,7 @@ if (!is_file($configFile)) {
 }
 $GLOBALS['config'] = require $configFile;
 
+require __DIR__ . '/version.php';
 require __DIR__ . '/db.php';
 require __DIR__ . '/helpers.php';
 require __DIR__ . '/screens.php';

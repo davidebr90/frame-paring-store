@@ -21,4 +21,10 @@ json_out([
     'qr_url'        => config('base_url') . '/cms/pair.php?code=' . $screen['pairing_code'],
     'expires_in'    => (int) config('pairing_ttl'),
     'poll_interval' => (int) config('poll_interval'),
+    // White label: testi e colore mostrati sulla schermata di configurazione
+    'branding'      => [
+        'title'    => branding_tv_title(),
+        'subtitle' => branding('brand_tv_subtitle'),
+        'accent'   => branding_accent(),
+    ],
 ]);

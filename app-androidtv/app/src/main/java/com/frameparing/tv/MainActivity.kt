@@ -85,6 +85,17 @@ class MainActivity : Activity() {
         refreshAutostartPanel()
     }
 
+    // Applica il white label ricevuto dal server alla schermata di configurazione
+    private fun applyBranding(title: String?, subtitle: String?, accent: String?) {
+        title?.let { findViewById<TextView>(R.id.brandTitle).text = it }
+        subtitle?.let { findViewById<TextView>(R.id.brandSubtitle).text = it }
+        accent?.let {
+            val color = android.graphics.Color.parseColor(it)
+            findViewById<TextView>(R.id.brandTitle).setTextColor(color)
+            pinText.setTextColor(color)
+        }
+    }
+
     // ---------- avvio automatico (Android 10+) ----------
 
     // Da Android 10 il sistema blocca le activity avviate dal BootReceiver
@@ -204,6 +215,7 @@ class MainActivity : Activity() {
                     continue
                 }
 
+                applyBranding(start.brandTitle, start.brandSubtitle, start.brandAccent)
                 pinText.text = start.pairingCode.chunked(3).joinToString(" ")
                 qrImage.setImageBitmap(QrCode.render(start.qrUrl, 512))
                 pairStatus.setText(R.string.pairing_wait)

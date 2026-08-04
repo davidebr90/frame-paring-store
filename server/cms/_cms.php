@@ -7,6 +7,7 @@ require dirname(__DIR__) . '/core/bootstrap.php';
 require dirname(__DIR__) . '/core/auth_cms.php';
 require dirname(__DIR__) . '/core/caps.php';
 require dirname(__DIR__) . '/core/trash.php';
+require dirname(__DIR__) . '/core/branding.php';
 
 // Nessuno stack trace verso il browser: un errore PDO mostrerebbe host,
 // utente e password del database nella pagina
@@ -35,6 +36,12 @@ header("Content-Security-Policy: frame-ancestors 'none'");
 header('Referrer-Policy: same-origin');
 
 $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
+
+// Installazione dismessa: nessuna pagina è raggiungibile finché il lock c'è
+if (is_file(APP_ROOT . '/core/uninstalled.lock') && $script !== 'uninstalled.php') {
+    redirect('uninstalled.php');
+}
+
 if (!users_exist() && $script !== 'setup.php') {
     redirect('setup.php');
 }
@@ -146,6 +153,17 @@ function cms_header(string $title, string $active = ''): void
                 ['key' => 'profile', 'href' => 'profile.php', 'label' => 'Il mio profilo', 'cap' => null],
             ],
         ],
+        [
+            'key'   => 'system',
+            'href'  => 'branding.php',
+            'label' => 'Sistema',
+            'icon'  => 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z',
+            'cap'   => 'settings.manage',
+            'items' => [
+                ['key' => 'branding',    'href' => 'branding.php',    'label' => 'Personalizzazione', 'cap' => 'settings.manage'],
+                ['key' => 'maintenance', 'href' => 'maintenance.php', 'label' => 'Manutenzione',      'cap' => 'settings.manage'],
+            ],
+        ],
     ];
 
     // Filtro per permessi
@@ -174,16 +192,23 @@ function cms_header(string $title, string $active = ''): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf" content="<?= e(csrf_token()) ?>">
-<title><?= e($title) ?> — Frame Paring Store</title>
+<title><?= e($title) ?> — <?= e(branding('brand_name')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/app.css">
+<style>:root { --accent: <?= branding_accent() ?>; --accent-ink: <?= branding_accent_ink() ?>; --accent-soft: <?= branding_accent() ?>1f; }</style>
 </head>
 <body>
 <div class="shell">
 <aside class="side">
-  <a class="brand" href="index.php"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></a>
+  <a class="brand" href="index.php">
+    <?php if ($logo = branding_logo_url()): ?>
+      <img class="brand-logo" src="<?= e($logo) ?>" alt="<?= e(branding('brand_name')) ?>">
+    <?php else: ?>
+      <span class="brand-led"></span><?= e(mb_strtoupper(branding('brand_name'))) ?>
+    <?php endif; ?>
+  </a>
   <nav class="nav">
     <?php foreach ($nav as $section):
         // La sezione è attiva se lo è una delle sue voci
@@ -221,7 +246,23 @@ function cms_header(string $title, string $active = ''): void
 
 function cms_footer(): void
 {
-    ?></main>
+    ?>
+<footer class="app-footer">
+  <div class="app-footer-left">
+    <strong><?= e(branding('brand_name')) ?></strong>
+    <span class="mono">v<?= APP_VERSION ?></span>
+    <span>·</span>
+    <span><?= date('d/m/Y', strtotime(APP_RELEASE_DATE)) ?></span>
+  </div>
+  <div class="app-footer-right">
+    <?php if ($note = branding('brand_footer_note')): ?>
+      <span><?= e($note) ?></span>
+    <?php else: ?>
+      <span>Sistema di digital signage self-hosted</span>
+    <?php endif; ?>
+  </div>
+</footer>
+</main>
 </div>
 <script src="assets/js/sortable.min.js"></script>
 <script src="assets/js/app.js"></script>

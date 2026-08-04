@@ -49,6 +49,7 @@
             android:padding="48dp">
 
             <TextView
+                android:id="@+id/brandTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/setup_title"
@@ -58,6 +59,7 @@
                 android:letterSpacing="0.2" />
 
             <TextView
+                android:id="@+id/brandSubtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/setup_subtitle"

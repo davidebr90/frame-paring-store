@@ -28,6 +28,9 @@ object ApiClient {
         val pollToken: String,
         val qrUrl: String,
         val expiresIn: Int,
+        val brandTitle: String?,    // white label: titolo mostrato sulla TV
+        val brandSubtitle: String?,
+        val brandAccent: String?,   // colore accento (#rrggbb)
     )
 
     sealed class PairState {
@@ -41,12 +44,18 @@ object ApiClient {
             "$baseUrl/api/v1/pair.php",
             JSONObject().put("device_info", deviceInfo),
         )
-        PairStart(
-            pairingCode = json.getString("pairing_code"),
-            pollToken = json.getString("poll_token"),
-            qrUrl = json.getString("qr_url"),
-            expiresIn = json.getInt("expires_in"),
-        )
+        run {
+            val brand = json.optJSONObject("branding")
+            PairStart(
+                pairingCode = json.getString("pairing_code"),
+                pollToken = json.getString("poll_token"),
+                qrUrl = json.getString("qr_url"),
+                expiresIn = json.getInt("expires_in"),
+                brandTitle = brand?.optString("title")?.takeIf { it.isNotBlank() },
+                brandSubtitle = brand?.optString("subtitle")?.takeIf { it.isNotBlank() },
+                brandAccent = brand?.optString("accent")?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) },
+            )
+        }
     }
 
     suspend fun pairStatus(baseUrl: String, pollToken: String): PairState = withContext(Dispatchers.IO) {

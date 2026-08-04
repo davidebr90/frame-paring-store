@@ -21,16 +21,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accedi — Frame Paring Store</title>
+<title>Accedi — <?= e(branding('brand_name')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/app.css">
+<style>:root { --accent: <?= branding_accent() ?>; --accent-ink: <?= branding_accent_ink() ?>; --accent-soft: <?= branding_accent() ?>1f; }</style>
 </head>
 <body class="auth-body">
 <div class="auth-card">
-  <div class="auth-brand"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></div>
-  <p class="auth-sub">Digital signage — pannello di controllo</p>
+  <div class="auth-brand">
+    <?php if ($logo = branding_logo_url()): ?>
+      <img class="brand-logo" src="<?= e($logo) ?>" alt="<?= e(branding('brand_name')) ?>" style="max-height:48px">
+    <?php else: ?>
+      <span class="brand-led"></span><?= e(mb_strtoupper(branding('brand_name'))) ?>
+    <?php endif; ?>
+  </div>
+  <p class="auth-sub"><?= e(branding('brand_tagline')) ?></p>
   <?php if ($error): ?><div class="flash flash-err"><?= e($error) ?></div><?php endif; ?>
   <form method="post">
     <?= csrf_field() ?>
