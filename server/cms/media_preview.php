@@ -6,7 +6,7 @@ declare(strict_types=1);
 require __DIR__ . '/_cms.php';
 
 $id = (int) ($_GET['id'] ?? 0);
-$stmt = db()->prepare('SELECT filename, mime_type FROM media WHERE id = ?');
+$stmt = db()->prepare('SELECT filename, mime_type FROM media WHERE id = ?');  // anche nel cestino: serve all'anteprima di ripristino
 $stmt->execute([$id]);
 $media = $stmt->fetch();
 

@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idleMode = ($_POST['idle_mode'] ?? 'black') === 'image' ? 'image' : 'black';
         $idleMediaId = (int) ($_POST['idle_media_id'] ?? 0);
         if ($idleMode === 'image') {
-            $check = $pdo->prepare("SELECT id FROM media WHERE id = ? AND type = 'image'");
+            $check = $pdo->prepare("SELECT id FROM media WHERE id = ? AND type = 'image' AND deleted_at IS NULL");
             $check->execute([$idleMediaId]);
             if ($check->fetchColumn() === false) {
                 // Nessuna immagine valida scelta: si ricade sul nero, senza stati incoerenti
@@ -105,7 +105,7 @@ $assigned = $assigned->fetchAll();
 
 $assignedIds = array_column($assigned, 'id');
 $available = array_filter(
-    $pdo->query('SELECT id, name FROM galleries ORDER BY name')->fetchAll(),
+    $pdo->query('SELECT id, name FROM galleries WHERE deleted_at IS NULL ORDER BY name')->fetchAll(),
     fn (array $g): bool => !in_array($g['id'], $assignedIds, true)
 );
 
@@ -116,7 +116,7 @@ $scheduleBands = $screen['schedule_json'] !== null
     : [];
 $imageMedia = $pdo->query("SELECT m.id, m.original_name, g.name AS gallery_name
                            FROM media m JOIN galleries g ON g.id = m.gallery_id
-                           WHERE m.type = 'image'
+                           WHERE m.type = 'image' AND m.deleted_at IS NULL AND g.deleted_at IS NULL
                            ORDER BY g.name, m.original_name")->fetchAll();
 
 cms_header($screen['name'], 'screens');

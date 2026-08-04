@@ -31,7 +31,7 @@ switch ($action) {
     case 'upload':
         require_cap('media.upload');
         $galleryId = (int) ($_POST['gallery_id'] ?? 0);
-        $stmt = $pdo->prepare('SELECT id FROM galleries WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT id FROM galleries WHERE id = ? AND deleted_at IS NULL');
         $stmt->execute([$galleryId]);
         if ($stmt->fetchColumn() === false) {
             json_error('Galleria non trovata', 404);
@@ -75,7 +75,7 @@ switch ($action) {
             $playlist['screen']['orientation'] = $screen['orientation'];
         } elseif ($galleryId > 0) {
             // Anteprima di una singola galleria: schermo fittizio orizzontale
-            $stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ?');
+            $stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ? AND deleted_at IS NULL');
             $stmt->execute([$galleryId]);
             $gallery = $stmt->fetch();
             if ($gallery === false) {
@@ -99,7 +99,7 @@ switch ($action) {
     case 'media_update':
         require_cap('media.edit');
         $id = (int) ($body['id'] ?? 0);
-        $stmt = $pdo->prepare('SELECT gallery_id FROM media WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT gallery_id FROM media WHERE id = ? AND deleted_at IS NULL');
         $stmt->execute([$id]);
         $galleryId = $stmt->fetchColumn();
         if ($galleryId === false) {
@@ -157,23 +157,22 @@ switch ($action) {
         touch_gallery((int) $galleryId);
         json_out(['ok' => true]);
 
+    // Il media va nel cestino: il file resta su disco ed è ripristinabile
     case 'media_delete':
         require_cap('media.upload');
         $id = (int) ($body['id'] ?? 0);
-        $stmt = $pdo->prepare('SELECT gallery_id, filename FROM media WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT gallery_id FROM media WHERE id = ? AND deleted_at IS NULL');
         $stmt->execute([$id]);
-        $row = $stmt->fetch();
-        if ($row === false) {
+        $galleryId = $stmt->fetchColumn();
+        if ($galleryId === false) {
             json_error('Media non trovato', 404);
         }
-        $path = UPLOADS_DIR . '/' . basename($row['filename']);
-        if (is_file($path)) {
-            unlink($path);
-        }
-        $pdo->prepare('DELETE FROM media WHERE id = ?')->execute([$id]);
-        heal_orphan_idle(); // la FK ha già messo a NULL gli idle_media_id
-        touch_gallery((int) $row['gallery_id']);
-        json_out(['ok' => true]);
+        trash_media($id, (int) current_user()['id']);
+        // Schermi che usavano questo media come immagine di cortesia
+        $pdo->prepare("UPDATE screens SET idle_mode = 'black', idle_media_id = NULL
+                       WHERE idle_media_id = ?")->execute([$id]);
+        touch_gallery((int) $galleryId);
+        json_out(['ok' => true, 'trashed' => true]);
 
     case 'media_reorder':
         require_cap('media.edit');
@@ -208,7 +207,7 @@ switch ($action) {
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM screen_galleries WHERE screen_id = ?')->execute([$screenId]);
         $stmt = $pdo->prepare('INSERT IGNORE INTO screen_galleries (screen_id, gallery_id, sort_order)
-                               SELECT ?, id, ? FROM galleries WHERE id = ?');
+                               SELECT ?, id, ? FROM galleries WHERE id = ? AND deleted_at IS NULL');
         foreach (array_values($ids) as $position => $galleryId) {
             $stmt->execute([$screenId, $position, (int) $galleryId]);
         }

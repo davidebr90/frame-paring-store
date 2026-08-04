@@ -19,7 +19,7 @@ if ($id < 1) {
 // oppure è la sua immagine di cortesia (che può stare in qualsiasi galleria)
 $stmt = db()->prepare('SELECT m.filename, m.mime_type, m.filesize
                        FROM media m
-                       WHERE m.id = :id AND (
+                       WHERE m.id = :id AND m.deleted_at IS NULL AND (
                            EXISTS (SELECT 1 FROM screen_galleries sg
                                    WHERE sg.gallery_id = m.gallery_id AND sg.screen_id = :sid)
                            OR EXISTS (SELECT 1 FROM screens s

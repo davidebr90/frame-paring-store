@@ -25,27 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Le gallerie di sistema non si eliminano: sono referenziate dal
         // funzionamento del CMS (es. immagini di cortesia degli schermi)
-        $stmt = $pdo->prepare('SELECT system_key FROM galleries WHERE id = ?');
-        $stmt->execute([$id]);
-        if ($stmt->fetchColumn()) {
+        if (!trash_gallery($id, (int) current_user()['id'])) {
             flash_set('err', 'Questa è una galleria di sistema e non può essere eliminata. Puoi però eliminarne i singoli file.');
             redirect('galleries.php');
         }
 
-        // Elimina prima i file da disco, poi la riga (cascade sui media)
-        $stmt = $pdo->prepare('SELECT filename FROM media WHERE gallery_id = ?');
-        $stmt->execute([$id]);
-        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $filename) {
-            $path = UPLOADS_DIR . '/' . basename($filename);
-            if (is_file($path)) {
-                unlink($path);
-            }
-        }
-        $pdo->prepare('DELETE FROM galleries WHERE id = ?')->execute([$id]);
-        // Schermi che usavano un'immagine di questa galleria come cortesia
-        $pdo->query("UPDATE screens SET idle_mode = 'black'
-                     WHERE idle_mode = 'image' AND idle_media_id IS NULL");
-        flash_set('ok', 'Galleria eliminata');
+        // Schermi che usavano come cortesia un'immagine finita nel cestino
+        $pdo->prepare("UPDATE screens SET idle_mode = 'black', idle_media_id = NULL
+                       WHERE idle_media_id IN (SELECT id FROM media WHERE gallery_id = ?)")
+            ->execute([$id]);
+        flash_set('ok', 'Galleria spostata nel cestino: puoi ripristinarla da Contenuti → Cestino');
     }
     redirect('galleries.php');
 }
@@ -54,7 +43,8 @@ $galleries = $pdo->query('SELECT g.*, COUNT(m.id) AS n_media,
                                  COALESCE(SUM(m.filesize), 0) AS bytes,
                                  (SELECT COUNT(*) FROM screen_galleries sg WHERE sg.gallery_id = g.id) AS n_screens
                           FROM galleries g
-                          LEFT JOIN media m ON m.gallery_id = g.id
+                          LEFT JOIN media m ON m.gallery_id = g.id AND m.deleted_at IS NULL
+                          WHERE g.deleted_at IS NULL
                           GROUP BY g.id
                           ORDER BY g.name')->fetchAll();
 

@@ -52,7 +52,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('user_edit.php?id=' . (int) $pdo->lastInsertId());
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
-                $errors[] = 'Esiste già un utente con questo username';
+                // Può essere un utente nel cestino: l'username resta occupato
+                $check = $pdo->prepare('SELECT id FROM users WHERE username = ? AND deleted_at IS NOT NULL');
+                $check->execute([$form['username']]);
+                $errors[] = $check->fetchColumn() !== false
+                    ? 'Un utente con questo username è nel cestino: ripristinalo o eliminalo definitivamente da Contenuti → Cestino'
+                    : 'Esiste già un utente con questo username';
             } else {
                 throw $e;
             }

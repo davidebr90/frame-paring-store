@@ -78,15 +78,52 @@ a:hover { text-decoration: underline; }
 
 .nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 
-/* Sottovoci di menu */
-.nav-sub { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px; }
-.nav-sub a {
-  display: block; padding: 7px 12px 7px 42px;
-  border-radius: var(--radius-sm);
-  color: var(--muted); font-size: .86rem; font-weight: 500;
+/* Chevron sulle sezioni che hanno sottovoci */
+.nav-link .nav-caret {
+  margin-left: auto; width: 12px; height: 12px; flex: none;
+  color: var(--muted); transition: transform .18s ease;
 }
-.nav-sub a:hover { color: var(--text); background: var(--panel-2); text-decoration: none; }
-.nav-sub a.active { color: var(--accent); background: var(--accent-soft); }
+.nav-link.active .nav-caret { transform: rotate(90deg); color: inherit; }
+
+/* Sottovoci disegnate come albero: linea guida verticale + connettori */
+.nav-sub {
+  position: relative;
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 3px 0 10px;
+  padding-left: 34px;
+}
+.nav-sub::before {
+  content: ''; position: absolute;
+  left: 21px; top: -2px; bottom: 17px;   /* si ferma a metà dell'ultima voce */
+  width: 1.5px; border-radius: 1px;
+  background: var(--line);
+}
+.nav-sub a {
+  position: relative;
+  display: block; padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted); font-size: .855rem; font-weight: 500;
+}
+/* Gomito: tratto orizzontale che collega la guida alla voce */
+.nav-sub a::before {
+  content: ''; position: absolute;
+  left: -13px; top: 50%;
+  width: 11px; height: 1.5px; border-radius: 1px;
+  background: var(--line);
+  transition: background .15s, width .15s;
+}
+.nav-sub a:hover { color: var(--text); text-decoration: none; }
+.nav-sub a:hover::before { background: var(--muted); }
+.nav-sub a.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.nav-sub a.active::before { background: var(--accent); width: 13px; }
+/* Pallino sulla voce attiva: chiude visivamente il ramo */
+.nav-sub a.active::after {
+  content: ''; position: absolute;
+  left: -16px; top: 50%; transform: translateY(-50%);
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
+}
 .nav-link {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: var(--radius-sm);

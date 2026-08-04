@@ -45,19 +45,17 @@ if ($status === 'active' || $status === 'inactive') {
     $params['active'] = $status === 'active' ? 1 : 0;
 }
 
-$sql = 'SELECT * FROM users';
-if ($where) {
-    $sql .= ' WHERE ' . implode(' AND ', $where);
-}
+array_unshift($where, 'deleted_at IS NULL');
+$sql = 'SELECT * FROM users WHERE ' . implode(' AND ', $where);
 $sql .= " ORDER BY FIELD(role,'admin','editor','operator'), COALESCE(full_name, username)";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $users = $stmt->fetchAll();
 
-$total = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+$total = (int) $pdo->query('SELECT COUNT(*) FROM users WHERE deleted_at IS NULL')->fetchColumn();
 $byRole = [];
-foreach ($pdo->query('SELECT role, COUNT(*) AS n FROM users GROUP BY role') as $row) {
+foreach ($pdo->query('SELECT role, COUNT(*) AS n FROM users WHERE deleted_at IS NULL GROUP BY role') as $row) {
     $byRole[$row['role']] = (int) $row['n'];
 }
 

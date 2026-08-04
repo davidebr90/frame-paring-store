@@ -22,7 +22,7 @@ function cms_session_start(): void
 
 function users_exist(): bool
 {
-    return (bool) db()->query('SELECT 1 FROM users LIMIT 1')->fetchColumn();
+    return (bool) db()->query('SELECT 1 FROM users WHERE deleted_at IS NULL LIMIT 1')->fetchColumn();
 }
 
 function current_user(): ?array
@@ -33,7 +33,7 @@ function current_user(): ?array
         if (isset($_SESSION['user_id'])) {
             // is_active: un utente disattivato perde l'accesso all'istante,
             // anche se ha una sessione aperta
-            $stmt = db()->prepare('SELECT * FROM users WHERE id = ? AND is_active = 1');
+            $stmt = db()->prepare('SELECT * FROM users WHERE id = ? AND is_active = 1 AND deleted_at IS NULL');
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch() ?: null;
         }
@@ -43,7 +43,7 @@ function current_user(): ?array
 
 function attempt_login(string $username, string $password): bool
 {
-    $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1');
+    $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1 AND deleted_at IS NULL');
     $stmt->execute([$username]);
     $row = $stmt->fetch();
 

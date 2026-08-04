@@ -10,9 +10,10 @@ $screens = $pdo->query('SELECT s.*, COUNT(sg.gallery_id) AS n_galleries
                         GROUP BY s.id
                         ORDER BY s.name, s.id')->fetchAll();
 $stats = $pdo->query('SELECT
-    (SELECT COUNT(*) FROM galleries)          AS galleries,
-    (SELECT COUNT(*) FROM media)              AS media,
-    (SELECT COALESCE(SUM(filesize), 0) FROM media) AS bytes')->fetch();
+    (SELECT COUNT(*) FROM galleries WHERE deleted_at IS NULL) AS galleries,
+    (SELECT COUNT(*) FROM media WHERE deleted_at IS NULL)      AS media,
+    (SELECT COALESCE(SUM(filesize), 0) FROM media WHERE deleted_at IS NULL) AS bytes,
+    (SELECT COUNT(*) FROM media WHERE deleted_at IS NOT NULL)  AS trashed')->fetch();
 
 $onlineWindow = (int) config('poll_interval') * 2 + 30;
 $online = 0;

@@ -6,6 +6,7 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/core/bootstrap.php';
 require dirname(__DIR__) . '/core/auth_cms.php';
 require dirname(__DIR__) . '/core/caps.php';
+require dirname(__DIR__) . '/core/trash.php';
 
 // Nessuno stack trace verso il browser: un errore PDO mostrerebbe host,
 // utente e password del database nella pagina
@@ -39,6 +40,12 @@ if (!users_exist() && $script !== 'setup.php') {
 }
 if (!defined('CMS_PUBLIC') && current_user() === null) {
     redirect('login.php');
+}
+
+// Su hosting condiviso non c'è un cron affidabile: la pulizia del cestino
+// scatta durante la normale navigazione, al massimo una volta all'ora
+if (current_user() !== null) {
+    trash_autoclean();
 }
 
 function flash_set(string $type, string $message): void
@@ -115,6 +122,7 @@ function cms_header(string $title, string $active = ''): void
             'items' => [
                 ['key' => 'galleries',     'href' => 'galleries.php',   'label' => 'Gallerie',        'cap' => null],
                 ['key' => 'galleries.new', 'href' => 'gallery_new.php', 'label' => 'Nuova galleria',  'cap' => 'gallery.manage'],
+                ['key' => 'trash',         'href' => 'trash.php',       'label' => 'Cestino',         'cap' => 'media.upload'],
             ],
         ],
         [
@@ -186,6 +194,9 @@ function cms_header(string $title, string $active = ''): void
     <a href="<?= $section['href'] ?>" class="nav-link<?= $sectionActive ? ' active' : '' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="<?= $section['icon'] ?>"/></svg>
       <span><?= $section['label'] ?></span>
+      <?php if ($section['items']): ?>
+      <svg class="nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      <?php endif; ?>
     </a>
     <?php if ($section['items'] && $sectionActive): ?>
     <div class="nav-sub">

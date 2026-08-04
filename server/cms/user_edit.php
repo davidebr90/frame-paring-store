@@ -10,7 +10,7 @@ $pdo = db();
 $me = current_user();
 $id = (int) ($_GET['id'] ?? 0);
 
-$stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
+$stmt = $pdo->prepare('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL');
 $stmt->execute([$id]);
 $user = $stmt->fetch();
 if ($user === false) {
@@ -21,7 +21,7 @@ $isMe = (int) $user['id'] === (int) $me['id'];
 
 function active_admins(PDO $pdo): int
 {
-    return (int) $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1")
+    return (int) $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1 AND deleted_at IS NULL")
         ->fetchColumn();
 }
 
@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($user['role'] === 'admin' && active_admins($pdo) <= 1) {
             flash_set('err', 'Deve restare almeno un amministratore attivo');
         } else {
-            $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$id]);
-            flash_set('ok', 'Utente eliminato');
+            trash_user($id, (int) $me['id']);
+            flash_set('ok', 'Utente spostato nel cestino: puoi ripristinarlo da Contenuti → Cestino');
             redirect('users.php');
         }
     }

@@ -7,7 +7,7 @@ require __DIR__ . '/_cms.php';
 
 $pdo = db();
 $id = (int) ($_GET['id'] ?? 0);
-$stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ?');
+$stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ? AND deleted_at IS NULL');
 $stmt->execute([$id]);
 $gallery = $stmt->fetch();
 if ($gallery === false) {
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('gallery.php?id=' . $id);
 }
 
-$stmt = $pdo->prepare('SELECT * FROM media WHERE gallery_id = ? ORDER BY sort_order, id');
+$stmt = $pdo->prepare('SELECT * FROM media WHERE gallery_id = ? AND deleted_at IS NULL ORDER BY sort_order, id');
 $stmt->execute([$id]);
 $media = $stmt->fetchAll();
 

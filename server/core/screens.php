@@ -143,7 +143,7 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
     $pdo->prepare('INSERT INTO media
                    (gallery_id, type, filename, original_name, mime_type, filesize, checksum, sort_order)
                    SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(m.sort_order), -1) + 1
-                   FROM media m WHERE m.gallery_id = ?')
+                   FROM media m WHERE m.gallery_id = ? AND m.deleted_at IS NULL')
         ->execute([
             $galleryId,
             str_starts_with($mime, 'image/') ? 'image' : 'video',
@@ -167,7 +167,7 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
 function courtesy_gallery_id(): int
 {
     $pdo = db();
-    $id = $pdo->query("SELECT id FROM galleries WHERE system_key = 'courtesy' LIMIT 1")
+    $id = $pdo->query("SELECT id FROM galleries WHERE system_key = 'courtesy' AND deleted_at IS NULL LIMIT 1")
         ->fetchColumn();
     if ($id !== false) {
         return (int) $id;
@@ -185,7 +185,7 @@ function playlist_for_gallery(array $gallery): array
                                   COALESCE(m.transition_in,  :t1) AS trans_in,
                                   COALESCE(m.transition_out, :t2) AS trans_out
                            FROM media m
-                           WHERE m.gallery_id = :gid
+                           WHERE m.gallery_id = :gid AND m.deleted_at IS NULL
                            ORDER BY m.sort_order, m.id');
     $stmt->execute([
         't1'  => $gallery['transition_default'],
@@ -237,6 +237,7 @@ function playlist_for_screen(array $screen): array
                            JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
                            JOIN galleries g        ON g.id = m.gallery_id
                            WHERE sg.screen_id = ?
+                             AND m.deleted_at IS NULL AND g.deleted_at IS NULL
                            ORDER BY sg.sort_order, m.gallery_id, m.sort_order, m.id');
     $stmt->execute([$screen['id']]);
 
@@ -277,7 +278,7 @@ function playlist_for_screen(array $screen): array
 
     $idleItem = null;
     if ($screen['idle_mode'] === 'image' && $screen['idle_media_id'] !== null) {
-        $stmt = db()->prepare("SELECT * FROM media WHERE id = ? AND type = 'image'");
+        $stmt = db()->prepare("SELECT * FROM media WHERE id = ? AND type = 'image' AND deleted_at IS NULL");
         $stmt->execute([$screen['idle_media_id']]);
         if (($m = $stmt->fetch()) !== false) {
             $idleItem = [

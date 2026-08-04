@@ -7,6 +7,18 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ------------------------------------------------------------
+-- Impostazioni di sistema (chiave/valore)
+-- ------------------------------------------------------------
+CREATE TABLE `settings` (
+  `key`   VARCHAR(60) NOT NULL,
+  `value` TEXT        NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `settings` (`key`, `value`) VALUES
+  ('trash_retention_days', '30');  -- 0 = non svuotare mai il cestino
+
+-- ------------------------------------------------------------
 -- Utenti amministratori del CMS
 -- ------------------------------------------------------------
 -- role: 'admin' ha sempre tutte le capabilities; 'editor' e 'operator'
@@ -25,8 +37,11 @@ CREATE TABLE `users` (
   `is_active`     TINYINT(1)       NOT NULL DEFAULT 1, -- disattivazione senza cancellare la storia
   `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_login_at` DATETIME         NULL,
+  `deleted_at`    DATETIME         NULL,   -- cestino: NULL = utente attivo
+  `deleted_by`    INT UNSIGNED     NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_users_username` (`username`)
+  UNIQUE KEY `uq_users_username` (`username`),
+  KEY `idx_users_deleted` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -85,8 +100,11 @@ CREATE TABLE `galleries` (
   `system_key` VARCHAR(40) NULL,                                     -- galleria di servizio (es. 'courtesy'): non eliminabile né rinominabile
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME     NULL,      -- cestino: NULL = attiva
+  `deleted_by` INT UNSIGNED NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_galleries_system_key` (`system_key`)
+  UNIQUE KEY `uq_galleries_system_key` (`system_key`),
+  KEY `idx_galleries_deleted` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -111,8 +129,11 @@ CREATE TABLE `media` (
   `muted`            TINYINT(1)    NOT NULL DEFAULT 1,      -- solo video: 1 = muto (default vetrina), 0 = con audio
   `sort_order`       INT UNSIGNED  NOT NULL DEFAULT 0, -- posizione nel drag & drop
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at`       DATETIME      NULL,               -- cestino: NULL = attivo
+  `deleted_by`       INT UNSIGNED  NULL,
   PRIMARY KEY (`id`),
   KEY `idx_media_gallery_order` (`gallery_id`, `sort_order`),
+  KEY `idx_media_deleted` (`deleted_at`),
   CONSTRAINT `fk_media_gallery`
     FOREIGN KEY (`gallery_id`) REFERENCES `galleries` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
