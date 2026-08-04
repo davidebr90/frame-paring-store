@@ -37,7 +37,14 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             return null // rete assente
         }
 
-        val playlist = Playlist.parse(raw)
+        // Risposta malformata (proxy, errore transitorio del server, ...):
+        // non deve MAI abbattere il ciclo di sync, si riprova al prossimo giro
+        val playlist = try {
+            Playlist.parse(raw)
+        } catch (e: Exception) {
+            android.util.Log.w("FPS", "Playlist malformata, la ignoro", e)
+            return null
+        }
         prefs.pollInterval = playlist.pollInterval
 
         // Scarica solo ciò che manca (il nome file È lo sha1 del contenuto)
@@ -54,7 +61,9 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             } catch (e: ApiException) {
                 if (e.code == 401 || e.code == 403) throw e
                 // download fallito: l'item salta questo giro, si ritenta al prossimo sync
-            } catch (_: Exception) {
+                android.util.Log.w("FPS", "Download ${item.id} fallito: ${e.message}")
+            } catch (e: Exception) {
+                android.util.Log.w("FPS", "Download ${item.id} errore IO", e)
             }
         }
 

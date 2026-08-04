@@ -59,7 +59,7 @@ cms_header('Schermi', 'screens');
   <?php else: ?>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Nome</th><th>Stato</th><th>Metodo</th><th>Gallerie</th><th>Ultimo contatto</th><th></th></tr></thead>
+    <thead><tr><th>Nome</th><th>Stato</th><th>Pannello</th><th>Metodo</th><th>Gallerie</th><th>Ultimo contatto</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($screens as $s): ?>
       <tr>
@@ -67,6 +67,7 @@ cms_header('Schermi', 'screens');
           <?php if ($s['device_info']): ?><div class="hint mono"><?= e($s['device_info']) ?></div><?php endif; ?>
         </td>
         <td><?= screen_badge($s, $onlineWindow) ?></td>
+        <td><?= $s['diagonal_inches'] !== null ? (int) $s['diagonal_inches'] . '&Prime; ' : '' ?><?= $s['orientation'] === 'portrait' ? 'verticale' : 'orizzontale' ?></td>
         <td><?= e($methodLabels[$s['pair_method']] ?? '—') ?></td>
         <td><?= (int) $s['n_galleries'] ?></td>
         <td class="hint"><?= $s['last_seen_at'] ? date('d/m/Y H:i', strtotime($s['last_seen_at'])) : '—' ?></td>

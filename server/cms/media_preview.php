@@ -21,8 +21,4 @@ if (!is_file($path)) {
     exit;
 }
 
-header('Content-Type: ' . $media['mime_type']);
-header('Content-Length: ' . filesize($path));
-header('Cache-Control: private, max-age=86400');
-readfile($path);
-exit;
+stream_file($path, $media['mime_type']);

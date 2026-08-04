@@ -202,21 +202,52 @@ tr:last-child td { border-bottom: 0; }
 .screen-card {
   position: relative;
   background: var(--panel); border: 1px solid var(--line-soft);
-  border-radius: var(--radius); padding: 18px;
-  display: flex; flex-direction: column; gap: 12px;
+  border-radius: var(--radius); padding: 20px;
+  display: flex; flex-direction: column; gap: 14px;
   transition: border-color .15s, transform .15s;
 }
 .screen-card:hover { border-color: var(--line); transform: translateY(-2px); }
-.screen-bezel {
-  aspect-ratio: 16 / 7; border-radius: 8px;
-  background: linear-gradient(145deg, #0a0c0f, #10141a 60%, #0a0c0f);
-  border: 1px solid var(--line);
+
+/* Palco: il pannello disegnato rispecchia l'orientamento fisico reale */
+.screen-stage {
+  height: 118px;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: .74rem; color: var(--muted);
-  letter-spacing: .06em;
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, #0a0c0f 0 8px, #0b0d11 8px 16px);
+  border: 1px solid var(--line-soft);
 }
-.screen-card .screen-name { font-weight: 700; }
-.screen-card .screen-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.screen-panel {
+  width: 150px; height: 86px;
+  background: linear-gradient(145deg, #0d1015, #141922 60%, #0d1015);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 600;
+  color: var(--muted); letter-spacing: .12em;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+}
+.screen-panel.portrait { width: 56px; height: 98px; }
+
+.screen-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.screen-name { font-weight: 700; font-size: 1.02rem; letter-spacing: -.01em; }
+.screen-device {
+  font-family: var(--font-mono); font-size: .7rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.screen-specs {
+  display: grid; grid-template-columns: auto 1fr; gap: 5px 14px;
+  margin: 0; padding: 12px 14px;
+  background: var(--panel-2); border-radius: var(--radius-sm);
+  font-size: .84rem;
+}
+.screen-specs dt { color: var(--muted); font-weight: 500; }
+.screen-specs dd { margin: 0; font-weight: 600; text-align: right; }
+
+.screen-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding-top: 2px;
+}
 .screen-card a.cover { position: absolute; inset: 0; border-radius: var(--radius); }
 
 /* ---------- PIN ---------- */

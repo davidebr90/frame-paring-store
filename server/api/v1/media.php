@@ -32,11 +32,4 @@ if (!is_file($path)) {
     json_error('File mancante sul server', 404);
 }
 
-if (function_exists('set_time_limit')) {
-    set_time_limit(0);
-}
-header('Content-Type: ' . $media['mime_type']);
-header('Content-Length: ' . filesize($path));
-header('Cache-Control: private, max-age=0');
-readfile($path);
-exit;
+stream_file($path, $media['mime_type']);

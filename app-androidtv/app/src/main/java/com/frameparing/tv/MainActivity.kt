@@ -193,12 +193,18 @@ class MainActivity : Activity() {
 
         playbackJob?.cancel()
         playbackJob = scope.launch {
-            // Prima la cache (playback immediato anche offline), poi il sync
-            var playingVersion: String? = null
+            // Prima la cache (playback immediato anche offline), poi il sync.
+            // La chiave include anche i checksum degli item pronti: se la
+            // version non cambia ma nuovi file completano il download, il
+            // loop va comunque rigenerato.
+            fun playKey(pl: Playlist): String =
+                pl.version + ":" + pl.items.joinToString(",") { it.checksum }
+
+            var playingKey: String? = null
             val cached = sync.cachedPlaylist()
             if (cached != null && cached.items.isNotEmpty()) {
                 playerController.play(cached)
-                playingVersion = cached.version
+                playingKey = playKey(cached)
             } else {
                 showPlayerStatus(R.string.status_syncing)
             }
@@ -209,14 +215,14 @@ class MainActivity : Activity() {
                     if (fresh != null) {
                         if (fresh.items.isEmpty()) {
                             playerController.stop()
-                            playingVersion = null
+                            playingKey = null
                             showPlayerStatus(R.string.status_empty)
-                        } else if (fresh.version != playingVersion) {
+                        } else if (playKey(fresh) != playingKey) {
                             hidePlayerStatus()
                             playerController.play(fresh)
-                            playingVersion = fresh.version
+                            playingKey = playKey(fresh)
                         }
-                    } else if (playingVersion == null) {
+                    } else if (playingKey == null) {
                         showPlayerStatus(R.string.status_error)
                     }
                 } catch (e: ApiException) {
@@ -226,6 +232,10 @@ class MainActivity : Activity() {
                     toast(getString(R.string.status_revoked))
                     showPairingPanel()
                     return@launch
+                } catch (e: Exception) {
+                    // Qualunque imprevisto NON deve uccidere il loop di sync:
+                    // uno schermo in vetrina deve riprovare, sempre
+                    android.util.Log.w("FPS", "Errore imprevisto nel sync, riprovo", e)
                 }
                 delay(prefs.pollInterval.coerceAtLeast(15) * 1_000L)
             }

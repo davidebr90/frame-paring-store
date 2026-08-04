@@ -75,6 +75,33 @@ function bearer_token(): ?string
     return null;
 }
 
+// Streaming di un file a blocchi con flush esplicito: readfile()+exit può
+// troncare la coda della risposta con client lenti (il server chiude prima
+// che il socket sia drenato). Qui la backpressure TCP regola il ritmo.
+function stream_file(string $path, string $mime): void
+{
+    if (function_exists('set_time_limit')) {
+        set_time_limit(0);
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($path));
+    header('Cache-Control: private, max-age=0');
+
+    $fh = fopen($path, 'rb');
+    if ($fh === false) {
+        exit;
+    }
+    while (!feof($fh)) {
+        echo fread($fh, 65536);
+        flush();
+    }
+    fclose($fh);
+    exit;
+}
+
 // Autentica il dispositivo e aggiorna last_seen_at. Esce con 401/403 se non valido.
 function require_device(): array
 {

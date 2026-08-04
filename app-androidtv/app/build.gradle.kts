@@ -28,6 +28,10 @@ android {
         release {
             isMinifyEnabled = false
         }
+        debug {
+            // 10.0.2.2 = localhost del PC visto dall'emulatore Android
+            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8080\"")
+        }
     }
 
     compileOptions {

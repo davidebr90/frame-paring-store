@@ -94,34 +94,44 @@ object ApiClient {
             val conn = open(item.url)
             conn.setRequestProperty("Authorization", "Bearer $token")
             try {
-                if (conn.responseCode !in 200..299) {
-                    throw ApiException(conn.responseCode, "HTTP ${conn.responseCode}")
-                }
-                val digest = MessageDigest.getInstance("SHA-1")
-                conn.inputStream.use { input ->
-                    FileOutputStream(tmp).use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            digest.update(buffer, 0, read)
-                            output.write(buffer, 0, read)
-                        }
-                    }
-                }
-                val sha1 = digest.digest().joinToString("") { "%02x".format(it) }
-                if (sha1 != item.checksum) {
-                    tmp.delete()
-                    throw ApiException(0, "Checksum errato per ${item.url}")
-                }
-                if (!tmp.renameTo(dest)) {
-                    tmp.delete()
-                    throw ApiException(0, "Impossibile salvare ${dest.name}")
-                }
+                downloadInto(conn, item, tmp, dest)
+            } catch (e: Exception) {
+                tmp.delete() // mai lasciare parziali in cache
+                throw e
             } finally {
                 conn.disconnect()
             }
         }
+
+    private fun downloadInto(
+        conn: HttpURLConnection,
+        item: PlaylistItem,
+        tmp: File,
+        dest: File,
+    ) {
+        if (conn.responseCode !in 200..299) {
+            throw ApiException(conn.responseCode, "HTTP ${conn.responseCode}")
+        }
+        val digest = MessageDigest.getInstance("SHA-1")
+        conn.inputStream.use { input ->
+            FileOutputStream(tmp).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                    output.write(buffer, 0, read)
+                }
+            }
+        }
+        val sha1 = digest.digest().joinToString("") { "%02x".format(it) }
+        if (sha1 != item.checksum) {
+            throw ApiException(0, "Checksum errato per ${item.url}")
+        }
+        if (!tmp.renameTo(dest)) {
+            throw ApiException(0, "Impossibile salvare ${dest.name}")
+        }
+    }
 
     // ---------- interni ----------
 

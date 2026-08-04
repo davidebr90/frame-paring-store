@@ -44,6 +44,8 @@ CREATE TABLE `screens` (
   `auth_token`       CHAR(64)      NULL,               -- token segreto rilasciato al pairing (hex 256 bit)
   `status`           ENUM('pending','paired','revoked') NOT NULL DEFAULT 'pending',
   `device_info`      VARCHAR(255)  NULL,               -- modello/OS dichiarati dall'app
+  `diagonal_inches`  SMALLINT UNSIGNED NULL,           -- polliciaggio del pannello fisico (es. 65)
+  `orientation`      ENUM('landscape','portrait') NOT NULL DEFAULT 'landscape', -- montaggio fisico
   `last_seen_at`     DATETIME      NULL,               -- ultimo polling ricevuto
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

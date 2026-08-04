@@ -19,13 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $do = (string) ($_POST['do'] ?? '');
 
-    if ($do === 'rename') {
+    if ($do === 'settings') {
         $name = trim((string) ($_POST['name'] ?? ''));
-        if ($name !== '' && mb_strlen($name) <= 100) {
-            $pdo->prepare('UPDATE screens SET name = ? WHERE id = ?')->execute([$name, $id]);
-            flash_set('ok', 'Nome aggiornato');
-        } else {
+        $inches = (int) ($_POST['diagonal_inches'] ?? 0);
+        $orientation = (string) ($_POST['orientation'] ?? 'landscape');
+        if ($name === '' || mb_strlen($name) > 100) {
             flash_set('err', 'Nome non valido');
+        } elseif ($inches < 0 || $inches > 500) {
+            flash_set('err', 'Polliciaggio non valido');
+        } elseif (!in_array($orientation, ['landscape', 'portrait'], true)) {
+            flash_set('err', 'Orientamento non valido');
+        } else {
+            $pdo->prepare('UPDATE screens SET name = ?, diagonal_inches = ?, orientation = ? WHERE id = ?')
+                ->execute([$name, $inches > 0 ? $inches : null, $orientation, $id]);
+            flash_set('ok', 'Impostazioni schermo salvate');
         }
     } elseif ($do === 'revoke') {
         // Il token resta in tabella ma lo status blocca ogni richiesta
@@ -71,13 +78,27 @@ cms_header($screen['name'], 'screens');
   <h2>Impostazioni</h2>
   <form method="post" class="form-row">
     <?= csrf_field() ?>
-    <input type="hidden" name="do" value="rename">
-    <div class="field">
+    <input type="hidden" name="do" value="settings">
+    <div class="field" style="flex:2">
       <label for="name">Nome schermo</label>
       <input type="text" id="name" name="name" maxlength="100" required value="<?= e($screen['name']) ?>">
     </div>
-    <button class="btn" type="submit">Rinomina</button>
+    <div class="field" style="max-width:150px">
+      <label for="diagonal_inches">Dimensione (pollici)</label>
+      <input type="number" id="diagonal_inches" name="diagonal_inches" min="0" max="500"
+             placeholder="es. 65" value="<?= $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : '' ?>">
+    </div>
+    <div class="field" style="max-width:190px">
+      <label for="orientation">Orientamento</label>
+      <select id="orientation" name="orientation">
+        <option value="landscape"<?= $screen['orientation'] === 'landscape' ? ' selected' : '' ?>>Orizzontale</option>
+        <option value="portrait"<?= $screen['orientation'] === 'portrait' ? ' selected' : '' ?>>Verticale</option>
+      </select>
+    </div>
+    <button class="btn" type="submit">Salva</button>
   </form>
+  <p class="hint" style="margin:12px 0 0">Dimensione e orientamento descrivono il pannello fisico:
+  ti guidano nella scelta di rotazione e adattamento dei media nelle gallerie.</p>
 </div>
 
 <?php if ($screen['status'] === 'pending' && $screen['claim_token'] !== null): ?>

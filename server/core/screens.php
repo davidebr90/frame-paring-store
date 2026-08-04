@@ -125,8 +125,10 @@ function playlist_for_screen(array $screen): array
 
     return [
         'screen' => [
-            'id'   => (int) $screen['id'],
-            'name' => $screen['name'],
+            'id'          => (int) $screen['id'],
+            'name'        => $screen['name'],
+            'orientation' => $screen['orientation'],
+            'inches'      => $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : null,
         ],
         'version'       => sha1(json_encode($items)),
         'poll_interval' => (int) config('poll_interval'),

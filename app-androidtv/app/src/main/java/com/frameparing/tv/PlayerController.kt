@@ -43,7 +43,6 @@ class PlayerController(
     private val handler = Handler(Looper.getMainLooper())
     private val players = arrayOfNulls<ExoPlayer>(2)
     private val playerListeners = arrayOfNulls<Player.Listener>(2)
-    private var activeSlot = 0
 
     private var items: List<PlaylistItem> = emptyList()
     private var index = 0
@@ -103,6 +102,17 @@ class PlayerController(
         val token = showToken
         handler.removeCallbacksAndMessages(null)
 
+        // Bonifica degli show superati al volo: via le view che non sono
+        // quella corrente e stop ai player non associati alla view visibile
+        // (un video abortito non deve continuare a suonare in background)
+        for (i in container.childCount - 1 downTo 0) {
+            val child = container.getChildAt(i)
+            if (child !== currentView) container.removeView(child)
+        }
+        players.forEachIndexed { i, p ->
+            if (i != currentSlot) p?.stop()
+        }
+
         val file = sync.localFile(item)
         if (!file.exists()) {
             scheduleSkip(token)
@@ -136,7 +146,9 @@ class PlayerController(
             val view = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_XY
                 setImageBitmap(bitmap)
+                alpha = 0f
             }
+            container.addView(view, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
             presentView(view, item, videoSlot = -1, token = token,
                 contentW = bitmap.width, contentH = bitmap.height, extraRotation = 0)
 
@@ -164,13 +176,17 @@ class PlayerController(
         players[slot] ?: ExoPlayer.Builder(context).build().also { players[slot] = it }
 
     private fun showVideo(item: PlaylistItem, file: File, token: Int) {
-        val slot = 1 - activeSlot
-        activeSlot = slot
+        // Mai lo slot della view ancora visibile: il crossfade richiede
+        // che il video uscente continui a riprodurre durante la transizione
+        val slot = if (currentSlot == 0) 1 else 0
         val player = pooledPlayer(slot)
 
         playerListeners[slot]?.let { player.removeListener(it) }
 
-        val texture = TextureView(context)
+        // La TextureView va attaccata SUBITO (invisibile): senza superficie
+        // il decoder non parte e onVideoSizeChanged non arriverebbe mai.
+        val texture = TextureView(context).apply { alpha = 0f }
+        container.addView(texture, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
         var presented = false
 
         val listener = object : Player.Listener {
@@ -227,7 +243,9 @@ class PlayerController(
         currentItem = item
         currentSlot = videoSlot
 
-        container.addView(view, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
+        // La view è già nel contenitore (attaccata da showImage/showVideo,
+        // invisibile): la si dimensiona, la si porta in cima e la si rivela
+        container.bringChildToFront(view)
         applyTransform(view, contentW, contentH, (item.rotation + extraRotation) % 360, item.fit)
 
         val transIn = effectiveIn(item)
@@ -240,12 +258,14 @@ class PlayerController(
         }
 
         if (duration <= 0L || (transIn == "cut" && transOut == "cut")) {
+            view.alpha = 1f
             cleanup()
             return
         }
 
         container.post {
             if (token != showToken) return@post
+            view.alpha = 1f // baseline; animateIn imposta lo stato iniziale se serve
             animateIn(view, transIn, duration)
             if (outgoingView != null) animateOut(outgoingView, transOut, duration, cleanup)
             else handler.postDelayed({ cleanup() }, duration)
@@ -307,10 +327,25 @@ class PlayerController(
 
     // ---------- geometria comune ----------
 
-    private fun applyTransform(view: View, contentW: Int, contentH: Int, rotation: Int, fit: String) {
+    private fun applyTransform(
+        view: View,
+        contentW: Int,
+        contentH: Int,
+        rotation: Int,
+        fit: String,
+        attempt: Int = 0,
+    ) {
         container.post {
             val w = container.width
             val h = container.height
+            // Cold start: il contenitore può non essere ancora misurato
+            if ((w == 0 || h == 0) && attempt < 20) {
+                handler.postDelayed(
+                    { applyTransform(view, contentW, contentH, rotation, fit, attempt + 1) },
+                    50,
+                )
+                return@post
+            }
             if (w == 0 || h == 0 || contentW == 0 || contentH == 0) return@post
 
             // Ingombro a schermo dopo la rotazione
