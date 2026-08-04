@@ -75,13 +75,21 @@ function confirm_pairing(string $code, string $method): ?int
         return null;
     }
 
-    $pdo->prepare("UPDATE screens
-                   SET status = 'paired',
-                       auth_token = ?,
-                       pair_method = ?,
-                       pairing_expires_at = NULL
-                   WHERE id = ?")
-        ->execute([random_hex(), $method, $id]);
+    // pairing_expires_at diventa la finestra di RITIRO del token: se la TV
+    // non lo ritira entro il TTL, il pairing scade e va rifatto (il
+    // poll_token non resta valido a tempo indefinito)
+    $stmt = $pdo->prepare("UPDATE screens
+                           SET status = 'paired',
+                               auth_token = ?,
+                               pair_method = ?,
+                               pairing_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND)
+                           WHERE id = ? AND status = 'pending'");
+    $stmt->execute([random_hex(), $method, (int) config('pairing_ttl'), $id]);
+
+    // Conferme simultanee dello stesso PIN: solo la prima passa
+    if ($stmt->rowCount() !== 1) {
+        return null;
+    }
 
     return (int) $id;
 }
@@ -113,14 +121,14 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
     }
 
     $pdo = db();
-    $stmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE gallery_id = ?');
-    $stmt->execute([$galleryId]);
-    $sortOrder = (int) $stmt->fetchColumn();
-
     $originalName = mb_substr((string) $file['name'], 0, 255);
+
+    // sort_order calcolato dentro la INSERT: upload concorrenti nella stessa
+    // galleria non possono ottenere la stessa posizione
     $pdo->prepare('INSERT INTO media
                    (gallery_id, type, filename, original_name, mime_type, filesize, checksum, sort_order)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                   SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(m.sort_order), -1) + 1
+                   FROM media m WHERE m.gallery_id = ?')
         ->execute([
             $galleryId,
             str_starts_with($mime, 'image/') ? 'image' : 'video',
@@ -129,7 +137,7 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
             $mime,
             $file['size'],
             sha1_file(UPLOADS_DIR . '/' . $filename),
-            $sortOrder,
+            $galleryId,
         ]);
     $newId = (int) $pdo->lastInsertId(); // prima di altri statement
 
@@ -234,7 +242,10 @@ function playlist_for_screen(array $screen): array
             'idle_mode' => $screen['idle_mode'],
             'idle_item' => $idleItem,
         ],
-        'version'       => sha1(json_encode($items)),
+        // La version copre TUTTO ciò che il player deve rispettare: media,
+        // fasce orarie e riposo. Se cambia solo la programmazione, la TV
+        // deve comunque accorgersene al primo polling.
+        'version'       => sha1(json_encode([$items, $bands, $screen['idle_mode'], $idleItem])),
         'poll_interval' => (int) config('poll_interval'),
         'items'         => $items,
     ];

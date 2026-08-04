@@ -40,8 +40,11 @@ data class TimeBand(val from: String, val to: String) {
     fun containsMinuteOfDay(minute: Int): Boolean {
         val start = toMinute(from)
         val end = toMinute(to)
-        return if (start <= end) minute in start until end
-        else minute >= start || minute < end
+        return when {
+            start == end -> true // stesso orario = copertura 24 ore
+            start < end -> minute in start until end
+            else -> minute >= start || minute < end // scavalca la mezzanotte
+        }
     }
 
     private fun toMinute(hhmm: String): Int =
@@ -74,7 +77,8 @@ data class Playlist(
                             mime = o.getString("mime"),
                             url = o.getString("url"),
                             filesize = o.getLong("filesize"),
-                            checksum = o.getString("checksum"),
+                            // lowercase: il checksum è anche il nome del file in cache
+                            checksum = o.getString("checksum").lowercase(),
                             rotation = o.getInt("rotation"),
                             fit = o.getString("fit"),
                             duration = o.getInt("duration"),

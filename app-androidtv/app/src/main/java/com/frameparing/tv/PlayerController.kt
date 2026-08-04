@@ -100,7 +100,7 @@ class PlayerController(
         showToken++
         val token = showToken
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.path) }
+            val bitmap = withContext(Dispatchers.IO) { decodeScaled(file.path) }
             if (token != showToken || bitmap == null) return@launch
             val view = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_XY
@@ -149,18 +149,22 @@ class PlayerController(
 
     // ---------- immagini ----------
 
+    // Decodifica ridimensionata: una foto da 8000px non deve mai entrare
+    // in memoria a piena risoluzione (OOM sui box con poca RAM)
+    private fun decodeScaled(path: String): android.graphics.Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        val maxSide = max(container.width, container.height).coerceAtLeast(1920)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) > maxSide || bounds.outHeight / (sample * 2) > maxSide) {
+            sample *= 2
+        }
+        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
     private fun showImage(item: PlaylistItem, file: File, token: Int) {
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.path, bounds)
-                val maxSide = max(container.width, container.height).coerceAtLeast(1920)
-                var sample = 1
-                while (bounds.outWidth / (sample * 2) > maxSide || bounds.outHeight / (sample * 2) > maxSide) {
-                    sample *= 2
-                }
-                BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
-            }
+            val bitmap = withContext(Dispatchers.IO) { decodeScaled(file.path) }
             if (token != showToken) return@launch
             if (bitmap == null) {
                 scheduleSkip(token)
@@ -177,7 +181,14 @@ class PlayerController(
                 contentW = bitmap.width, contentH = bitmap.height, extraRotation = 0)
 
             val displayMs = item.duration.coerceAtLeast(1) * 1_000L
-            if (effectiveIn(item) == "kenburns") startKenBurns(view, item.transitionMs + displayMs)
+            // Ken Burns parte DOPO l'entrata: condividono il ViewPropertyAnimator
+            // della view, quindi avviarlo subito annullerebbe l'animazione di entrata
+            if (effectiveIn(item) == "kenburns") {
+                handler.postDelayed(
+                    { if (token == showToken) startKenBurns(view, displayMs) },
+                    item.transitionMs,
+                )
+            }
             handler.postDelayed({ if (token == showToken) next() }, item.transitionMs + displayMs)
         }
     }
@@ -276,9 +287,11 @@ class PlayerController(
         val transOut = resolveRandom(outgoingItem?.transitionOut ?: "cut")
         val duration = item.transitionMs
 
+        // La cleanup può scattare dopo che un nuovo show ha già riassegnato
+        // lo slot: si ferma il player solo se quello slot non è più in uso
         val cleanup = {
             outgoingView?.let { container.removeView(it) }
-            if (outgoingSlot >= 0 && outgoingSlot != videoSlot) players[outgoingSlot]?.stop()
+            if (outgoingSlot >= 0 && outgoingSlot != currentSlot) players[outgoingSlot]?.stop()
         }
 
         if (duration <= 0L || (transIn == "cut" && transOut == "cut")) {

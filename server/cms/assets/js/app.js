@@ -92,7 +92,12 @@
     var fileInput = dropzone.querySelector('input[type=file]');
     var dzLabel = dropzone.querySelector('.dz-label');
 
-    dropzone.addEventListener('click', function () { fileInput.click(); });
+    // Il click sull'input non deve ribollire fino alla dropzone (ricorsione)
+    fileInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    dropzone.addEventListener('click', function (ev) {
+      if (ev.target === fileInput) { return; }
+      fileInput.click();
+    });
     ['dragover', 'dragenter'].forEach(function (t) {
       dropzone.addEventListener(t, function (ev) { ev.preventDefault(); dropzone.classList.add('drag'); });
     });
@@ -109,7 +114,13 @@
 
       function next() {
         if (!queue.length) {
-          if (failed) { toast(failed + ' file non caricati', true); }
+          // Se qualcosa è fallito NON si ricarica subito: l'utente deve poter
+          // leggere quali file non sono passati e perché
+          if (failed) {
+            dzLabel.textContent = failed + ' file non caricati (' + done + ' ok) — clicca per riprovare, oppure ricarica la pagina';
+            toast(failed + ' file non caricati', true);
+            return;
+          }
           window.location.reload();
           return;
         }
@@ -129,7 +140,11 @@
             if (r.ok) { done++; } else { failed++; toast(file.name + ': ' + (r.j.error || 'errore'), true); }
             next();
           })
-          .catch(function () { failed++; next(); });
+          .catch(function (err) {
+            failed++;
+            toast(file.name + ': ' + (err.message || 'errore di rete'), true);
+            next();
+          });
       }
       next();
     }
@@ -145,20 +160,25 @@
         galleryList.querySelectorAll('li'),
         function (el) { return parseInt(el.dataset.id, 10); }
       );
-      api('screen_galleries', { screen_id: screenId, gallery_ids: ids })
+      return api('screen_galleries', { screen_id: screenId, gallery_ids: ids })
         .then(function () { toast('Assegnazione salvata'); })
-        .catch(function (e) { toast(e.message, true); });
+        .catch(function (e) { toast(e.message, true); throw e; });
     }
 
     if (window.Sortable) {
       new Sortable(galleryList, { animation: 160, handle: '.drag', onEnd: saveGalleries });
     }
 
+    // Rimozione con rollback: la riga torna al suo posto se il server rifiuta
     galleryList.addEventListener('click', function (ev) {
       var btn = ev.target.closest('.remove');
       if (!btn) { return; }
-      btn.closest('li').remove();
-      saveGalleries();
+      var li = btn.closest('li');
+      var sibling = li.nextElementSibling;
+      li.remove();
+      saveGalleries().catch(function () {
+        galleryList.insertBefore(li, sibling);
+      });
     });
 
     var addSelect = document.getElementById('gallery-add');
@@ -198,15 +218,35 @@
     var idleModeSel = document.getElementById('idle_mode');
     var idleField = document.getElementById('idle-media-field');
 
+    // Costruzione via DOM: i valori non passano mai da innerHTML
     function addBand(from, to) {
       var row = document.createElement('div');
       row.className = 'band-row';
-      row.innerHTML =
-        '<input type="time" class="band-from" value="' + (from || '09:00') + '">' +
-        '<span class="band-sep">→</span>' +
-        '<input type="time" class="band-to" value="' + (to || '20:00') + '">' +
-        '<button type="button" class="remove" title="Rimuovi fascia">×</button>';
-      row.querySelector('.remove').addEventListener('click', function () { row.remove(); });
+
+      var inputFrom = document.createElement('input');
+      inputFrom.type = 'time';
+      inputFrom.className = 'band-from';
+      inputFrom.required = true;
+      inputFrom.value = from || '09:00';
+
+      var sep = document.createElement('span');
+      sep.className = 'band-sep';
+      sep.textContent = '→';
+
+      var inputTo = document.createElement('input');
+      inputTo.type = 'time';
+      inputTo.className = 'band-to';
+      inputTo.required = true;
+      inputTo.value = to || '20:00';
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'remove';
+      remove.title = 'Rimuovi fascia';
+      remove.textContent = '×';
+      remove.addEventListener('click', function () { row.remove(); });
+
+      row.append(inputFrom, sep, inputTo, remove);
       bandsBox.appendChild(row);
     }
 
@@ -216,13 +256,22 @@
 
     document.getElementById('band-add').addEventListener('click', function () { addBand(); });
 
-    scheduleForm.addEventListener('submit', function () {
-      var bands = Array.prototype.map.call(bandsBox.querySelectorAll('.band-row'), function (row) {
-        return {
-          from: row.querySelector('.band-from').value,
-          to: row.querySelector('.band-to').value
-        };
-      }).filter(function (b) { return b.from && b.to && b.from !== b.to; });
+    scheduleForm.addEventListener('submit', function (ev) {
+      var bands = [];
+      var invalid = null;
+      Array.prototype.forEach.call(bandsBox.querySelectorAll('.band-row'), function (row) {
+        var from = row.querySelector('.band-from').value;
+        var to = row.querySelector('.band-to').value;
+        if (!from || !to || from === to) { invalid = invalid || row; return; }
+        bands.push({ from: from, to: to });
+      });
+      // Mai scartare fasce in silenzio: si blocca il salvataggio e si segnala
+      if (invalid) {
+        ev.preventDefault();
+        invalid.querySelector('.band-from').focus();
+        toast('Fascia incompleta: inizio e fine devono essere valorizzati e diversi', true);
+        return;
+      }
       document.getElementById('schedule-json').value = JSON.stringify(bands);
     });
 

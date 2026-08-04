@@ -59,8 +59,9 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
                 ApiClient.downloadMedia(item, token, file)
                 ready.add(item)
             } catch (e: ApiException) {
-                if (e.code == 401 || e.code == 403) throw e
-                // download fallito: l'item salta questo giro, si ritenta al prossimo sync
+                // Un 401/403 sul singolo media NON è una revoca (può venire da
+                // WAF/CDN/hotlink protection): la revoca la dichiara solo la
+                // playlist, che è appena passata. Qui si salta e si ritenta.
                 android.util.Log.w("FPS", "Download ${item.id} fallito: ${e.message}")
             } catch (e: Exception) {
                 android.util.Log.w("FPS", "Download ${item.id} errore IO", e)
@@ -73,21 +74,22 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             if (!file.exists() || file.length() != idle.filesize) {
                 try {
                     ApiClient.downloadMedia(idle, token, file)
-                } catch (e: ApiException) {
-                    if (e.code == 401 || e.code == 403) throw e
                 } catch (_: Exception) {
+                    // come sopra: un download fallito non è mai una revoca
                 }
             }
         }
 
-        // La cache diventa ufficiale solo ora; poi si eliminano i file orfani
+        // La cache diventa ufficiale solo ora; poi si eliminano i file orfani.
+        // Anche i .part: qui nessun download è in corso, quindi un .part è
+        // sempre un residuo (es. app uccisa a metà download) da spazzare.
         prefs.playlistJson = raw
         val wanted = buildSet {
             playlist.items.forEach { add(it.localName) }
             playlist.idleItem?.let { add(it.localName) }
         }
         mediaDir.listFiles()?.forEach { file ->
-            if (file.name !in wanted && !file.name.endsWith(".part")) {
+            if (file.name !in wanted) {
                 file.delete()
             }
         }

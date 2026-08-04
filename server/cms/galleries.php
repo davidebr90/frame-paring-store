@@ -29,6 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         $pdo->prepare('DELETE FROM galleries WHERE id = ?')->execute([$id]);
+        // Schermi che usavano un'immagine di questa galleria come cortesia
+        $pdo->query("UPDATE screens SET idle_mode = 'black'
+                     WHERE idle_mode = 'image' AND idle_media_id IS NULL");
         flash_set('ok', 'Galleria eliminata');
     }
     redirect('galleries.php');

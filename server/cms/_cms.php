@@ -6,7 +6,31 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/core/bootstrap.php';
 require dirname(__DIR__) . '/core/auth_cms.php';
 
+// Nessuno stack trace verso il browser: un errore PDO mostrerebbe host,
+// utente e password del database nella pagina
+set_exception_handler(function (Throwable $e): void {
+    error_log($e->getMessage());
+    http_response_code(500);
+    if (str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'json')
+        || str_ends_with($_SERVER['SCRIPT_NAME'] ?? '', 'api.php')) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => 'Errore interno del server']);
+    } else {
+        echo '<!doctype html><meta charset="utf-8">'
+            . '<p style="font:16px system-ui;padding:2rem">Errore interno del server. '
+            . 'Controlla il log degli errori dell\'hosting.</p>';
+    }
+    exit;
+});
+ini_set('display_errors', '0');
+
 cms_session_start();
+
+// Il CMS non va mai incorniciato: evita clickjacking (es. conferma di
+// pairing di un dispositivo ostile con un click su una pagina esca)
+header('X-Frame-Options: DENY');
+header("Content-Security-Policy: frame-ancestors 'none'");
+header('Referrer-Policy: same-origin');
 
 $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
 if (!users_exist() && $script !== 'setup.php') {

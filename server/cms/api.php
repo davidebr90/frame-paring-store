@@ -14,6 +14,14 @@ function touch_gallery(int $galleryId): void
     db()->prepare('UPDATE galleries SET updated_at = NOW() WHERE id = ?')->execute([$galleryId]);
 }
 
+// Nessuno schermo deve restare in modalità "immagine di cortesia" senza
+// immagine (es. dopo la cancellazione del media scelto): si ricade sul nero.
+function heal_orphan_idle(): void
+{
+    db()->query("UPDATE screens SET idle_mode = 'black'
+                 WHERE idle_mode = 'image' AND idle_media_id IS NULL");
+}
+
 $action = (string) ($_GET['action'] ?? '');
 $body = str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') ? read_json_body() : [];
 $pdo = db();
@@ -120,6 +128,7 @@ switch ($action) {
             unlink($path);
         }
         $pdo->prepare('DELETE FROM media WHERE id = ?')->execute([$id]);
+        heal_orphan_idle(); // la FK ha già messo a NULL gli idle_media_id
         touch_gallery((int) $row['gallery_id']);
         json_out(['ok' => true]);
 

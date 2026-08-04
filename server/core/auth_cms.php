@@ -51,6 +51,9 @@ function attempt_login(string $username, string $password): bool
         return false;
     }
 
+    // Il token CSRF nato prima del login non deve sopravvivere all'elevazione
+    // di privilegio: si rigenera insieme all'ID di sessione
+    unset($_SESSION['csrf']);
     session_regenerate_id(true);
     $_SESSION['user_id'] = (int) $row['id'];
     db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')
@@ -81,11 +84,12 @@ function csrf_field(): string
     return '<input type="hidden" name="_csrf" value="' . e(csrf_token()) . '">';
 }
 
-// Valida il token da campo POST o header X-CSRF-Token (fetch JS)
+// Valida il token da campo POST o header X-CSRF-Token (fetch JS).
+// 403 e non 419: i codici non standard vengono convertiti in 500 da Apache.
 function require_csrf(): void
 {
     $sent = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!is_string($sent) || !hash_equals(csrf_token(), $sent)) {
-        json_error('Sessione scaduta, ricaricare la pagina', 419);
+        json_error('Sessione scaduta, ricaricare la pagina', 403);
     }
 }

@@ -38,30 +38,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $raw = (string) ($_POST['schedule_json'] ?? '[]');
         $decoded = json_decode($raw, true);
         $bands = [];
-        if (is_array($decoded)) {
+        $invalid = false;
+
+        if (!is_array($decoded)) {
+            // JSON illeggibile: non si cancella in silenzio la programmazione
+            $invalid = true;
+        } else {
             foreach ($decoded as $band) {
                 if (isset($band['from'], $band['to'])
-                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $band['from'])
-                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $band['to'])
+                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) $band['from'])
+                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) $band['to'])
                     && $band['from'] !== $band['to']) {
                     $bands[] = ['from' => $band['from'], 'to' => $band['to']];
+                } else {
+                    $invalid = true;
                 }
             }
         }
+
+        if ($invalid) {
+            flash_set('err', 'Fasce orarie non valide: controlla gli orari (inizio e fine devono essere diversi). Nessuna modifica salvata.');
+            redirect('screen.php?id=' . $id);
+        }
+
         $idleMode = ($_POST['idle_mode'] ?? 'black') === 'image' ? 'image' : 'black';
         $idleMediaId = (int) ($_POST['idle_media_id'] ?? 0);
-        if ($idleMode === 'image' && $idleMediaId > 0) {
+        if ($idleMode === 'image') {
             $check = $pdo->prepare("SELECT id FROM media WHERE id = ? AND type = 'image'");
             $check->execute([$idleMediaId]);
             if ($check->fetchColumn() === false) {
+                // Nessuna immagine valida scelta: si ricade sul nero, senza stati incoerenti
+                $idleMode = 'black';
                 $idleMediaId = 0;
             }
         }
+
         $pdo->prepare('UPDATE screens SET schedule_json = ?, idle_mode = ?, idle_media_id = ? WHERE id = ?')
             ->execute([
                 $bands ? json_encode($bands) : null,
                 $idleMode,
-                $idleMode === 'image' && $idleMediaId > 0 ? $idleMediaId : null,
+                $idleMode === 'image' ? $idleMediaId : null,
                 $id,
             ]);
         flash_set('ok', $bands

@@ -125,7 +125,7 @@ object ApiClient {
             }
         }
         val sha1 = digest.digest().joinToString("") { "%02x".format(it) }
-        if (sha1 != item.checksum) {
+        if (!sha1.equals(item.checksum, ignoreCase = true)) {
             throw ApiException(0, "Checksum errato per ${item.url}")
         }
         if (!tmp.renameTo(dest)) {
