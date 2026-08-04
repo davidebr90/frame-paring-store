@@ -57,19 +57,35 @@ switch ($action) {
             'label' => 'Immagini di cortesia — ' . $media['label'],
         ]);
 
-    // Playlist risolta di uno schermo per l'anteprima nel CMS: stessi dati
-    // che riceve la TV (transizioni ereditate, rotazioni, fit, fasce),
-    // ma con URL di anteprima serviti dalla sessione admin
+    // Playlist risolta per l'anteprima nel CMS: stessi dati che riceve la TV
+    // (transizioni ereditate, rotazioni, fit, fasce), ma con URL serviti
+    // dalla sessione admin. Funziona per uno schermo o per una galleria.
     case 'preview':
-        $screenId = (int) ($_GET['screen_id'] ?? 0);
-        $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
-        $stmt->execute([$screenId]);
-        $screen = $stmt->fetch();
-        if ($screen === false) {
-            json_error('Schermo non trovato', 404);
+        $screenId  = (int) ($_GET['screen_id'] ?? 0);
+        $galleryId = (int) ($_GET['gallery_id'] ?? 0);
+
+        if ($screenId > 0) {
+            $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
+            $stmt->execute([$screenId]);
+            $screen = $stmt->fetch();
+            if ($screen === false) {
+                json_error('Schermo non trovato', 404);
+            }
+            $playlist = playlist_for_screen($screen);
+            $playlist['screen']['orientation'] = $screen['orientation'];
+        } elseif ($galleryId > 0) {
+            // Anteprima di una singola galleria: schermo fittizio orizzontale
+            $stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ?');
+            $stmt->execute([$galleryId]);
+            $gallery = $stmt->fetch();
+            if ($gallery === false) {
+                json_error('Galleria non trovata', 404);
+            }
+            $playlist = playlist_for_gallery($gallery);
+        } else {
+            json_error('Indicare screen_id o gallery_id', 422);
         }
 
-        $playlist = playlist_for_screen($screen);
         foreach ($playlist['items'] as &$item) {
             $item['url'] = 'media_preview.php?id=' . $item['id'];
         }
@@ -78,7 +94,6 @@ switch ($action) {
             $playlist['schedule']['idle_item']['url'] =
                 'media_preview.php?id=' . $playlist['schedule']['idle_item']['id'];
         }
-        $playlist['screen']['orientation'] = $screen['orientation'];
         json_out($playlist);
 
     case 'media_update':

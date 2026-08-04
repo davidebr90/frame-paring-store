@@ -20,6 +20,21 @@ const TRANSITIONS = [
     'random'      => 'Casuale',
 ];
 
+// Etichette brevi per i menu stretti delle card media
+const TRANSITIONS_SHORT = [
+    'cut'         => 'Taglio',
+    'fade'        => 'Dissolv. nero',
+    'crossfade'   => 'Dissolv. incr.',
+    'slide_left'  => 'Scorri ←',
+    'slide_right' => 'Scorri →',
+    'slide_up'    => 'Scorri ↑',
+    'slide_down'  => 'Scorri ↓',
+    'zoom_in'     => 'Zoom in',
+    'zoom_out'    => 'Zoom out',
+    'kenburns'    => 'Ken Burns',
+    'random'      => 'Casuale',
+];
+
 // Crea uno schermo 'pending' con PIN univoco. Ritenta in caso di
 // collisione sul codice (violazione della UNIQUE KEY, SQLSTATE 23000).
 function create_pending_screen(?string $deviceInfo): array
@@ -160,6 +175,51 @@ function courtesy_gallery_id(): int
     $pdo->prepare("INSERT INTO galleries (name, system_key) VALUES (?, 'courtesy')")
         ->execute(['Immagini di cortesia']);
     return (int) $pdo->lastInsertId();
+}
+
+// Playlist di una singola galleria, nello stesso formato di quella degli
+// schermi: serve all'anteprima nel CMS (nessuna fascia oraria, nessun idle).
+function playlist_for_gallery(array $gallery): array
+{
+    $stmt = db()->prepare('SELECT m.*,
+                                  COALESCE(m.transition_in,  :t1) AS trans_in,
+                                  COALESCE(m.transition_out, :t2) AS trans_out
+                           FROM media m
+                           WHERE m.gallery_id = :gid
+                           ORDER BY m.sort_order, m.id');
+    $stmt->execute([
+        't1'  => $gallery['transition_default'],
+        't2'  => $gallery['transition_default'],
+        'gid' => $gallery['id'],
+    ]);
+
+    $items = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $items[] = [
+            'id'             => (int) $row['id'],
+            'type'           => $row['type'],
+            'mime'           => $row['mime_type'],
+            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
+            'filesize'       => (int) $row['filesize'],
+            'checksum'       => $row['checksum'],
+            'rotation'       => (int) $row['rotation'],
+            'fit'            => $row['fit'],
+            'duration'       => (int) $row['duration_seconds'],
+            'transition_in'  => $row['trans_in'],
+            'transition_out' => $row['trans_out'],
+            'transition_ms'  => (int) $gallery['transition_duration_ms'],
+            'muted'          => (bool) $row['muted'],
+            'name'           => $row['original_name'],
+        ];
+    }
+
+    return [
+        'screen'        => ['id' => 0, 'name' => $gallery['name'], 'orientation' => 'landscape', 'inches' => null],
+        'schedule'      => ['bands' => [], 'idle_mode' => 'black', 'idle_item' => null],
+        'version'       => sha1(json_encode($items)),
+        'poll_interval' => (int) config('poll_interval'),
+        'items'         => $items,
+    ];
 }
 
 // Playlist di uno schermo: gallerie assegnate in ordine, media in sort_order.

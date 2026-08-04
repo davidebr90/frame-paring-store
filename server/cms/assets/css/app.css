@@ -126,7 +126,11 @@ a:hover { text-decoration: underline; }
   border-radius: var(--radius);
   padding: 22px;
 }
-.card + .card { margin-top: 18px; }
+/* Spaziatura di flusso: OGNI blocco di primo livello del main respira,
+   non solo le card tra loro (card→griglia, griglia→card, form→card…) */
+.main > * + *,
+.main > form > * + * { margin-top: 22px; }
+.main > .flash + * { margin-top: 0; } /* il flash ha già il suo margine sotto */
 .card h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
 .card > p { margin: 0 0 16px; }
 .card > p:last-child { margin-bottom: 0; }
@@ -337,7 +341,14 @@ tr:last-child td { border-bottom: 0; }
 .media-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .media-controls .full { grid-column: 1 / -1; }
 .media-controls label { font-size: .68rem; margin-bottom: 3px; }
-.media-controls select, .media-controls input { padding: 6px 8px; font-size: .84rem; }
+.media-controls select, .media-controls input { padding: 6px 8px; font-size: .82rem; }
+/* Nelle card strette la freccia deve rubare meno spazio al testo */
+.media-controls select {
+  padding-right: 26px;
+  background-position: right 8px center;
+  background-size: 10px 7px;
+  text-overflow: ellipsis;
+}
 .media-foot { display: flex; justify-content: space-between; align-items: center; }
 .save-dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -358,6 +369,43 @@ tr:last-child td { border-bottom: 0; }
 .sort-list li .grow { flex: 1; }
 .sort-list li .remove { color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 1.1rem; }
 .sort-list li .remove:hover { color: var(--err); }
+
+/* ---------- Anteprima schermo ---------- */
+.pv { display: flex; flex-direction: column; gap: 14px; }
+.pv-frame {
+  width: 100%; max-width: 720px; margin: 0 auto;
+  aspect-ratio: 16 / 9;
+  padding: 10px; border-radius: 14px;
+  background: linear-gradient(145deg, #16191f, #0d1015);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+}
+.pv.portrait .pv-frame { aspect-ratio: 9 / 16; max-width: 340px; }
+.pv-stage {
+  position: relative; width: 100%; height: 100%;
+  background: #000; border-radius: 6px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.pv-media {
+  position: absolute; top: 50%; left: 50%;
+  margin: 0; transform-origin: center center;
+  will-change: transform, opacity;
+  /* la posizione base è il centro: le transizioni agiscono da qui */
+  translate: -50% -50%;
+  object-fit: fill;
+}
+.pv-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+}
+.pv-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.pv-counter { color: var(--muted); font-size: .8rem; }
+.pv-caption {
+  font-size: .78rem; color: var(--muted);
+  padding: 10px 14px; background: var(--panel-2);
+  border-radius: var(--radius-sm); line-height: 1.6;
+}
+.pv-idle-note { margin: 0; }
 
 /* ---------- Editor fasce orarie ---------- */
 .band-row {
@@ -403,6 +451,34 @@ tr:last-child td { border-bottom: 0; }
 }
 .filter-bar .field { margin-bottom: 0; }
 .filter-actions { display: flex; gap: 8px; }
+
+/* ---------- Toggle vista card / elenco ---------- */
+.view-toggle {
+  display: inline-flex; margin-left: auto;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  overflow: hidden; background: var(--panel-2);
+}
+.view-toggle a {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 14px; font-size: .85rem; font-weight: 600;
+  color: var(--muted); background: transparent;
+}
+.view-toggle a + a { border-left: 1px solid var(--line); }
+.view-toggle a:hover { color: var(--text); text-decoration: none; background: var(--panel); }
+.view-toggle a.active { color: var(--accent-ink); background: var(--accent); }
+.view-toggle svg { width: 15px; height: 15px; }
+
+/* ---------- Utenti: tabella elenco ---------- */
+.user-table td { vertical-align: middle; }
+.user-table tr.is-inactive { opacity: .6; }
+.user-table .cell-user { display: flex; align-items: center; gap: 12px; }
+.user-table .cell-user strong { display: inline-flex; align-items: center; gap: 8px; }
+.user-table .hint { font-size: .82rem; }
+.user-table .role-chip { font-size: .68rem; padding: 4px 9px; }
+.user-table tr.role-admin    { --role-color: #ffb224; --role-tint: rgba(255, 178, 36, .12); }
+.user-table tr.role-editor   { --role-color: #4aa3ff; --role-tint: rgba(74, 163, 255, .12); }
+.user-table tr.role-operator { --role-color: #3ecf6e; --role-tint: rgba(62, 207, 110, .12); }
+.user-avatar.sm { width: 34px; height: 34px; border-radius: 9px; font-size: .92rem; }
 
 /* ---------- Utenti: card per ruolo ---------- */
 .user-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 22px; }

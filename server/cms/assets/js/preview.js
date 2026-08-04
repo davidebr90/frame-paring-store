@@ -202,7 +202,11 @@
     currentEl = null;
     caption.textContent = 'Caricamento…';
 
-    fetch('api.php?action=preview&screen_id=' + root.dataset.screen, {
+    var query = Number(root.dataset.gallery) > 0
+      ? 'gallery_id=' + root.dataset.gallery
+      : 'screen_id=' + root.dataset.screen;
+
+    fetch('api.php?action=preview&' + query, {
       method: 'POST',
       headers: { 'X-CSRF-Token': CSRF }
     })

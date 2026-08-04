@@ -172,6 +172,8 @@ cms_header($screen['name'], 'screens');
 </div>
 <?php endif; ?>
 
+<?php $previewScreen = (int) $screen['id']; require __DIR__ . '/_preview.php'; ?>
+
 <div class="card">
   <h2>Gallerie assegnate</h2>
   <p class="hint">Trascina per cambiare l'ordine di riproduzione. Le modifiche
@@ -210,7 +212,7 @@ cms_header($screen['name'], 'screens');
     <input type="hidden" name="do" value="schedule">
     <input type="hidden" name="schedule_json" id="schedule-json">
     <div id="bands" data-bands='<?= e(json_encode($scheduleBands)) ?>'></div>
-    <button type="button" class="btn btn-sm" id="band-add" style="margin-top:4px">+ Aggiungi fascia</button>
+    <button type="button" class="btn btn-sm" id="band-add" style="margin-top:14px">+ Aggiungi fascia</button>
     <div class="form-row" style="margin-top:18px">
       <div class="field">
         <label for="idle_mode">Fuori fascia mostra</label>

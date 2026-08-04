@@ -214,6 +214,7 @@ function cms_footer(): void
 </div>
 <script src="assets/js/sortable.min.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/preview.js"></script>
 </body>
 </html><?php
 }

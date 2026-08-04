@@ -95,6 +95,8 @@ cms_header($gallery['name'], 'galleries');
   </form>
 </div>
 
+<?php if ($media): $previewGallery = (int) $gallery['id']; require __DIR__ . '/_preview.php'; endif; ?>
+
 <div class="dropzone" id="dropzone" data-gallery="<?= (int) $gallery['id'] ?>">
   <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm">
   <div class="dz-label">Trascina qui immagini o video, oppure clicca per scegliere</div>
@@ -133,8 +135,8 @@ cms_header($gallery['name'], 'galleries');
         <div>
           <label>Entrata</label>
           <select data-media-field="transition_in">
-            <option value="">Default galleria</option>
-            <?php foreach (TRANSITIONS as $key => $label): ?>
+            <option value="">Default</option>
+            <?php foreach (TRANSITIONS_SHORT as $key => $label): ?>
             <option value="<?= e($key) ?>"<?= $m['transition_in'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
             <?php endforeach; ?>
           </select>
@@ -142,8 +144,8 @@ cms_header($gallery['name'], 'galleries');
         <div>
           <label>Uscita</label>
           <select data-media-field="transition_out">
-            <option value="">Default galleria</option>
-            <?php foreach (TRANSITIONS as $key => $label): ?>
+            <option value="">Default</option>
+            <?php foreach (TRANSITIONS_SHORT as $key => $label): ?>
             <option value="<?= e($key) ?>"<?= $m['transition_out'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
             <?php endforeach; ?>
           </select>
