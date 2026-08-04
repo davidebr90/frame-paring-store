@@ -1,3 +1,17 @@
+/*
+ * Frame Paring Store — sistema di digital signage self-hosted
+ * Copyright (C) 2026 Davide Pica
+ *
+ * Questo programma è software libero: puoi ridistribuirlo e/o modificarlo
+ * secondo i termini della GNU Affero General Public License come pubblicata
+ * dalla Free Software Foundation, versione 3 della licenza.
+ *
+ * Questo programma è distribuito nella speranza che sia utile, ma SENZA
+ * ALCUNA GARANZIA. Vedi la GNU Affero General Public License per i dettagli.
+ * Dovresti aver ricevuto una copia della licenza insieme a questo programma;
+ * in caso contrario: https://www.gnu.org/licenses/
+ */
+
 package com.frameparing.tv
 
 import android.app.Activity

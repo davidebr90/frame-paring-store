@@ -1,0 +1,31 @@
+# Normalizza i fine riga: LF nel repository, nativi in locale
+* text=auto eol=lf
+
+*.php    text
+*.kt     text
+*.kts    text
+*.xml    text
+*.sql    text
+*.md     text
+*.css    text
+*.js     text
+*.htaccess text
+
+# File binari
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.gif    binary
+*.mp4    binary
+*.webm   binary
+*.apk    binary
+*.jar    binary
+
+# Script che devono restare eseguibili su Unix
+gradlew  text eol=lf
+
+# Esclusi dall'archivio scaricabile da GitHub
+docs/       export-ignore
+.gitignore  export-ignore
+.gitattributes export-ignore
