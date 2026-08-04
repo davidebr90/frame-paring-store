@@ -20,4 +20,14 @@
     <string name="autostart_button">Attiva avvio automatico</string>
     <string name="autostart_done">Avvio automatico attivo: l\'app ripartirà da sola all\'accensione</string>
     <string name="autostart_manual">Apri Impostazioni → App → Frame Paring Store e attiva "Mostra sopra altre app"</string>
+    <string name="settings_title">Impostazioni schermo</string>
+    <string name="settings_hint">Premi MENU sul telecomando (o tieni premuto OK) per riaprire questa schermata.</string>
+    <string name="settings_server">Indirizzo del server</string>
+    <string name="settings_save">Salva indirizzo</string>
+    <string name="settings_close">Chiudi</string>
+    <string name="settings_unpair">Disassocia questo schermo</string>
+    <string name="settings_unpair_confirm">Premi di nuovo per confermare la disassociazione</string>
+    <string name="settings_saved">Indirizzo salvato: lo schermo va riassociato al nuovo server</string>
+    <string name="settings_state_paired">Associato</string>
+    <string name="settings_state_unpaired">Non associato</string>
 </resources>

@@ -33,6 +33,112 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- Impostazioni richiamabili dal telecomando anche dopo il pairing -->
+    <ScrollView
+        android:id="@+id/settingsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F00C0E11"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:padding="48dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_title"
+                android:textColor="#E9EBEE"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/settingsState"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="26dp"
+                android:textColor="#8B93A2"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="620dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_server"
+                    android:textColor="#8B93A2"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/settingsServerInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/server_hint"
+                    android:textColor="#E9EBEE"
+                    android:textColorHint="#5A6272"
+                    android:textSize="16sp"
+                    android:inputType="textUri"
+                    android:imeOptions="actionDone"
+                    android:maxLines="1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="16dp">
+
+                    <Button
+                        android:id="@+id/settingsSaveButton"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_save"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/settingsCloseButton"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="@string/settings_close" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/settingsUnpairButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
+                    android:text="@string/settings_unpair" />
+
+                <TextView
+                    android:id="@+id/settingsVersion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="26dp"
+                    android:textColor="#5A6272"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/settings_hint"
+                    android:textColor="#5A6272"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
     <!-- Pannello di setup / pairing -->
     <ScrollView
         android:id="@+id/pairingPanel"

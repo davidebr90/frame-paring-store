@@ -47,6 +47,8 @@ class MainActivity : Activity() {
     private lateinit var pairStatus: TextView
     private lateinit var claimInput: EditText
     private lateinit var playerStatus: TextView
+    private lateinit var settingsPanel: View
+    private lateinit var settingsServerInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +73,12 @@ class MainActivity : Activity() {
         pairStatus = findViewById(R.id.pairStatus)
         claimInput = findViewById(R.id.claimInput)
         playerStatus = findViewById(R.id.playerStatus)
+        settingsPanel = findViewById(R.id.settingsPanel)
+        settingsServerInput = findViewById(R.id.settingsServerInput)
+
+        findViewById<Button>(R.id.settingsSaveButton).setOnClickListener { saveServerFromSettings() }
+        findViewById<Button>(R.id.settingsCloseButton).setOnClickListener { closeSettings() }
+        findViewById<Button>(R.id.settingsUnpairButton).setOnClickListener { unpairFromSettings() }
 
         serverInput.setText(prefs.baseUrl ?: BuildConfig.DEFAULT_BASE_URL)
         findViewById<Button>(R.id.pairButton).setOnClickListener { startPairing() }
@@ -83,6 +91,93 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshAutostartPanel()
+    }
+
+    // ---------- impostazioni richiamabili dal telecomando ----------
+
+    // MENU (presente sui telecomandi Fire TV) oppure pressione lunga su OK:
+    // servono per cambiare server o disassociare una TV già in funzione.
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_MENU ||
+            keyCode == android.view.KeyEvent.KEYCODE_SETTINGS
+        ) {
+            toggleSettings()
+            return true
+        }
+        // Pressione lunga su OK: alternativa per i telecomandi senza tasto MENU
+        if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER && event?.repeatCount == 4) {
+            toggleSettings()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onBackPressed() {
+        if (settingsPanel.visibility == View.VISIBLE) {
+            closeSettings()
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
+
+    private var unpairArmed = false
+
+    private fun toggleSettings() {
+        if (settingsPanel.visibility == View.VISIBLE) {
+            closeSettings()
+            return
+        }
+        unpairArmed = false
+        settingsServerInput.setText(prefs.baseUrl ?: BuildConfig.DEFAULT_BASE_URL)
+        findViewById<TextView>(R.id.settingsState).setText(
+            if (prefs.authToken != null) R.string.settings_state_paired else R.string.settings_state_unpaired
+        )
+        findViewById<TextView>(R.id.settingsVersion).text =
+            "${BuildConfig.VERSION_NAME} · ${ApiClient.deviceInfo}"
+        findViewById<Button>(R.id.settingsUnpairButton).setText(R.string.settings_unpair)
+        settingsPanel.visibility = View.VISIBLE
+        settingsServerInput.requestFocus()
+    }
+
+    private fun closeSettings() {
+        settingsPanel.visibility = View.GONE
+        unpairArmed = false
+    }
+
+    // Cambio di server: il token attuale vale solo per il vecchio host,
+    // quindi si riparte dal pairing sul nuovo indirizzo.
+    private fun saveServerFromSettings() {
+        val base = settingsServerInput.text.toString().trim().trimEnd('/')
+        if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            toast(getString(R.string.server_hint))
+            return
+        }
+        val changed = base != prefs.baseUrl
+        prefs.baseUrl = base
+        if (changed) {
+            prefs.clearPairing()
+            toast(getString(R.string.settings_saved))
+            closeSettings()
+            showPairingPanel()
+            serverInput.setText(base)
+        } else {
+            closeSettings()
+        }
+    }
+
+    // Disassociazione locale: la TV dimentica il token e torna al pairing.
+    // Doppia pressione per evitare disassociazioni accidentali.
+    private fun unpairFromSettings() {
+        val button = findViewById<Button>(R.id.settingsUnpairButton)
+        if (!unpairArmed) {
+            unpairArmed = true
+            button.setText(R.string.settings_unpair_confirm)
+            return
+        }
+        prefs.clearPairing()
+        closeSettings()
+        showPairingPanel()
     }
 
     // Applica il white label ricevuto dal server alla schermata di configurazione
