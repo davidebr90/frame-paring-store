@@ -34,12 +34,32 @@ data class PlaylistItem(
         }
 }
 
+// Fascia oraria di attività (valutata con l'orologio del dispositivo).
+// Una fascia con from > to scavalca la mezzanotte (es. 22:00 -> 06:00).
+data class TimeBand(val from: String, val to: String) {
+    fun containsMinuteOfDay(minute: Int): Boolean {
+        val start = toMinute(from)
+        val end = toMinute(to)
+        return if (start <= end) minute in start until end
+        else minute >= start || minute < end
+    }
+
+    private fun toMinute(hhmm: String): Int =
+        hhmm.substringBefore(':').toInt() * 60 + hhmm.substringAfter(':').toInt()
+}
+
 data class Playlist(
     val screenName: String,
     val version: String,
     val pollInterval: Int,
     val items: List<PlaylistItem>,
+    val scheduleBands: List<TimeBand> = emptyList(), // vuoto = sempre attivo
+    val idleMode: String = "black",                  // "black" | "image"
+    val idleItem: PlaylistItem? = null,              // immagine di cortesia
 ) {
+    fun isActiveAt(minuteOfDay: Int): Boolean =
+        scheduleBands.isEmpty() || scheduleBands.any { it.containsMinuteOfDay(minuteOfDay) }
+
     companion object {
         fun parse(json: String): Playlist {
             val root = JSONObject(json)
@@ -67,11 +87,47 @@ data class Playlist(
                     )
                 }
             }
+            val schedule = root.optJSONObject("schedule")
+            val bands = buildList {
+                val arr2 = schedule?.optJSONArray("bands")
+                if (arr2 != null) {
+                    for (i in 0 until arr2.length()) {
+                        val b = arr2.getJSONObject(i)
+                        val from = b.optString("from")
+                        val to = b.optString("to")
+                        if (Regex("""\d{2}:\d{2}""").matches(from) && Regex("""\d{2}:\d{2}""").matches(to)) {
+                            add(TimeBand(from, to))
+                        }
+                    }
+                }
+            }
+            val idleJson = schedule?.optJSONObject("idle_item")
+            val idleItem = idleJson?.let { o ->
+                PlaylistItem(
+                    id = o.getInt("id"),
+                    type = "image",
+                    mime = o.getString("mime"),
+                    url = o.getString("url"),
+                    filesize = o.getLong("filesize"),
+                    checksum = o.getString("checksum"),
+                    rotation = o.optInt("rotation", 0),
+                    fit = o.optString("fit", "contain"),
+                    duration = 0,
+                    transitionIn = "crossfade",
+                    transitionOut = "crossfade",
+                    transitionMs = 600L,
+                    muted = true,
+                )
+            }
+
             return Playlist(
                 screenName = root.getJSONObject("screen").getString("name"),
                 version = root.getString("version"),
                 pollInterval = root.getInt("poll_interval"),
                 items = items,
+                scheduleBands = bands,
+                idleMode = schedule?.optString("idle_mode", "black") ?: "black",
+                idleItem = idleItem,
             )
         }
     }

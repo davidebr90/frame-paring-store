@@ -191,6 +191,92 @@
     );
   });
 
+  /* ---------- Editor fasce orarie (dettaglio schermo) ---------- */
+  var bandsBox = document.getElementById('bands');
+  if (bandsBox) {
+    var scheduleForm = document.getElementById('schedule-form');
+    var idleModeSel = document.getElementById('idle_mode');
+    var idleField = document.getElementById('idle-media-field');
+
+    function addBand(from, to) {
+      var row = document.createElement('div');
+      row.className = 'band-row';
+      row.innerHTML =
+        '<input type="time" class="band-from" value="' + (from || '09:00') + '">' +
+        '<span class="band-sep">→</span>' +
+        '<input type="time" class="band-to" value="' + (to || '20:00') + '">' +
+        '<button type="button" class="remove" title="Rimuovi fascia">×</button>';
+      row.querySelector('.remove').addEventListener('click', function () { row.remove(); });
+      bandsBox.appendChild(row);
+    }
+
+    (JSON.parse(bandsBox.dataset.bands || '[]') || []).forEach(function (b) {
+      addBand(b.from, b.to);
+    });
+
+    document.getElementById('band-add').addEventListener('click', function () { addBand(); });
+
+    scheduleForm.addEventListener('submit', function () {
+      var bands = Array.prototype.map.call(bandsBox.querySelectorAll('.band-row'), function (row) {
+        return {
+          from: row.querySelector('.band-from').value,
+          to: row.querySelector('.band-to').value
+        };
+      }).filter(function (b) { return b.from && b.to && b.from !== b.to; });
+      document.getElementById('schedule-json').value = JSON.stringify(bands);
+    });
+
+    function syncIdleField() {
+      idleField.style.display = idleModeSel.value === 'image' ? '' : 'none';
+    }
+    idleModeSel.addEventListener('change', syncIdleField);
+    syncIdleField();
+
+    /* Upload diretto dell'immagine di cortesia (galleria di servizio) */
+    var idleBtn = document.getElementById('idle-upload-btn');
+    var idleInput = document.getElementById('idle-upload-input');
+    var idleSelect = document.getElementById('idle_media_id');
+    var idlePreview = document.getElementById('idle-preview');
+
+    function refreshIdlePreview() {
+      if (idleSelect.value) {
+        idlePreview.src = 'media_preview.php?id=' + idleSelect.value;
+        idlePreview.style.display = '';
+      } else {
+        idlePreview.style.display = 'none';
+      }
+    }
+    idleSelect.addEventListener('change', refreshIdlePreview);
+
+    idleBtn.addEventListener('click', function () { idleInput.click(); });
+    idleInput.addEventListener('change', function () {
+      if (!idleInput.files.length) { return; }
+      var form = new FormData();
+      form.append('screen_id', idleBtn.dataset.screen);
+      form.append('file', idleInput.files[0]);
+      idleBtn.disabled = true;
+      fetch('api.php?action=idle_upload', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': CSRF },
+        body: form
+      }).then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+        .then(function (r) {
+          if (!r.ok) { throw new Error(r.j.error || 'Errore di caricamento'); }
+          var opt = document.createElement('option');
+          opt.value = r.j.id;
+          opt.textContent = r.j.label;
+          opt.selected = true;
+          idleSelect.appendChild(opt);
+          idleModeSel.value = 'image';
+          syncIdleField();
+          refreshIdlePreview();
+          toast('Immagine di cortesia caricata e attivata');
+        })
+        .catch(function (e) { toast(e.message, true); })
+        .finally(function () { idleBtn.disabled = false; idleInput.value = ''; });
+    });
+  }
+
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');
   if (pin) {

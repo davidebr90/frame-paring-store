@@ -46,14 +46,21 @@ CREATE TABLE `screens` (
   `device_info`      VARCHAR(255)  NULL,               -- modello/OS dichiarati dall'app
   `diagonal_inches`  SMALLINT UNSIGNED NULL,           -- polliciaggio del pannello fisico (es. 65)
   `orientation`      ENUM('landscape','portrait') NOT NULL DEFAULT 'landscape', -- montaggio fisico
+  `schedule_json`    TEXT          NULL,               -- fasce orarie attive [{"from":"09:00","to":"20:00"},...]; NULL = sempre attivo
+  `idle_mode`        ENUM('black','image') NOT NULL DEFAULT 'black', -- fuori fascia: nero (spento apparente) o immagine di cortesia
+  `idle_media_id`    INT UNSIGNED  NULL,               -- immagine di cortesia (un media immagine)
   `last_seen_at`     DATETIME      NULL,               -- ultimo polling ricevuto
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_screens_pairing_code` (`pairing_code`),
   UNIQUE KEY `uq_screens_poll_token` (`poll_token`),
   UNIQUE KEY `uq_screens_claim_token` (`claim_token`),
-  UNIQUE KEY `uq_screens_auth_token` (`auth_token`)
+  UNIQUE KEY `uq_screens_auth_token` (`auth_token`),
+  KEY `idx_screens_idle_media` (`idle_media_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- FK aggiunta dopo la creazione di `media` (dipendenza circolare screens<->media)
+-- ALTER TABLE screens ADD CONSTRAINT fk_screens_idle_media
+--   FOREIGN KEY (idle_media_id) REFERENCES media (id) ON DELETE SET NULL;
 
 -- ------------------------------------------------------------
 -- Gallerie (playlist di media)
@@ -117,6 +124,12 @@ CREATE TABLE `screen_galleries` (
     FOREIGN KEY (`gallery_id`) REFERENCES `galleries` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- FK differita: screens.idle_media_id -> media.id (vedi nota sopra)
+ALTER TABLE `screens`
+  ADD CONSTRAINT `fk_screens_idle_media`
+  FOREIGN KEY (`idle_media_id`) REFERENCES `media` (`id`)
+  ON DELETE SET NULL ON UPDATE CASCADE;
 
 SET FOREIGN_KEY_CHECKS = 1;
 

@@ -87,6 +87,30 @@ class PlayerController(
         }
     }
 
+    // Fuori fascia oraria: ferma il loop e mostra l'immagine di cortesia
+    // (con i suoi metadati di rotazione/fit) oppure nero se item è null.
+    fun idle(item: PlaylistItem?) {
+        stop()
+        if (item == null) return // contenitore vuoto su sfondo nero = spento apparente
+
+        val file = sync.localFile(item)
+        if (!file.exists()) return
+
+        running = false
+        showToken++
+        val token = showToken
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.path) }
+            if (token != showToken || bitmap == null) return@launch
+            val view = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.FIT_XY
+                setImageBitmap(bitmap)
+            }
+            container.addView(view, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
+            applyTransform(view, bitmap.width, bitmap.height, item.rotation, item.fit)
+        }
+    }
+
     private fun next() {
         if (!running || items.isEmpty()) return
         index = (index + 1) % items.size

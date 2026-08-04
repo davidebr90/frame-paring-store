@@ -22,6 +22,17 @@
         android:textSize="20sp"
         android:visibility="gone" />
 
+    <!-- Invito discreto (20s all'avvio, solo se il permesso manca) -->
+    <Button
+        android:id="@+id/playerAutostartButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="36dp"
+        android:text="@string/autostart_button"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Pannello di setup / pairing -->
     <ScrollView
         android:id="@+id/pairingPanel"
@@ -151,6 +162,40 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="@string/manual_go" />
+            </LinearLayout>
+
+            <!-- Avvio automatico: visibile solo se il permesso manca (Android 10+) -->
+            <LinearLayout
+                android:id="@+id/autostartPanel"
+                android:layout_width="560dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="42dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/autostart_title"
+                    android:textColor="#E9EBEE"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/autostart_hint"
+                    android:textColor="#8B93A2"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/autostartButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/autostart_button"
+                    android:textStyle="bold" />
             </LinearLayout>
 
         </LinearLayout>

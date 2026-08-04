@@ -27,50 +27,25 @@ switch ($action) {
         if ($stmt->fetchColumn() === false) {
             json_error('Galleria non trovata', 404);
         }
+        $media = store_uploaded_media($_FILES['file'] ?? [], $galleryId);
+        json_out(['id' => $media['id']]);
 
-        $file = $_FILES['file'] ?? null;
-        if ($file === null || $file['error'] !== UPLOAD_ERR_OK) {
-            json_error('Upload fallito (file troppo grande per i limiti PHP dell\'hosting?)', 422);
+    // Immagine di cortesia: upload nella galleria di servizio e attivazione
+    // immediata sullo schermo indicato
+    case 'idle_upload':
+        $screenId = (int) ($_POST['screen_id'] ?? 0);
+        $stmt = $pdo->prepare('SELECT id FROM screens WHERE id = ?');
+        $stmt->execute([$screenId]);
+        if ($stmt->fetchColumn() === false) {
+            json_error('Schermo non trovato', 404);
         }
-        if ($file['size'] > (int) config('max_upload_bytes')) {
-            json_error('File oltre il limite di ' . human_bytes((int) config('max_upload_bytes')), 422);
-        }
-
-        // Il MIME si verifica dal contenuto reale, mai dal nome file
-        $allowed = [
-            'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
-            'image/gif' => 'gif', 'video/mp4' => 'mp4', 'video/webm' => 'webm',
-        ];
-        $mime = (string) finfo_file(finfo_open(FILEINFO_MIME_TYPE), $file['tmp_name']);
-        if (!isset($allowed[$mime])) {
-            json_error('Formato non supportato: ' . $mime, 422);
-        }
-
-        $filename = bin2hex(random_bytes(16)) . '.' . $allowed[$mime];
-        if (!move_uploaded_file($file['tmp_name'], UPLOADS_DIR . '/' . $filename)) {
-            json_error('Impossibile salvare il file (permessi cartella uploads?)', 500);
-        }
-
-        $stmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE gallery_id = ?');
-        $stmt->execute([$galleryId]);
-        $sortOrder = (int) $stmt->fetchColumn();
-
-        $pdo->prepare('INSERT INTO media
-                       (gallery_id, type, filename, original_name, mime_type, filesize, checksum, sort_order)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([
-                $galleryId,
-                str_starts_with($mime, 'image/') ? 'image' : 'video',
-                $filename,
-                mb_substr((string) $file['name'], 0, 255),
-                $mime,
-                $file['size'],
-                sha1_file(UPLOADS_DIR . '/' . $filename),
-                $sortOrder,
-            ]);
-        $newId = (int) $pdo->lastInsertId(); // prima di touch_gallery: l'UPDATE lo azzererebbe
-        touch_gallery($galleryId);
-        json_out(['id' => $newId]);
+        $media = store_uploaded_media($_FILES['file'] ?? [], courtesy_gallery_id(), imagesOnly: true);
+        $pdo->prepare("UPDATE screens SET idle_mode = 'image', idle_media_id = ? WHERE id = ?")
+            ->execute([$media['id'], $screenId]);
+        json_out([
+            'id'    => $media['id'],
+            'label' => 'Immagini di cortesia — ' . $media['label'],
+        ]);
 
     case 'media_update':
         $id = (int) ($body['id'] ?? 0);

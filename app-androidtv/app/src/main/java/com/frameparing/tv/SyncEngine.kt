@@ -67,9 +67,25 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             }
         }
 
+        // Anche l'immagine di cortesia va in cache (serve fuori fascia, offline)
+        playlist.idleItem?.let { idle ->
+            val file = localFile(idle)
+            if (!file.exists() || file.length() != idle.filesize) {
+                try {
+                    ApiClient.downloadMedia(idle, token, file)
+                } catch (e: ApiException) {
+                    if (e.code == 401 || e.code == 403) throw e
+                } catch (_: Exception) {
+                }
+            }
+        }
+
         // La cache diventa ufficiale solo ora; poi si eliminano i file orfani
         prefs.playlistJson = raw
-        val wanted = playlist.items.map { it.localName }.toSet()
+        val wanted = buildSet {
+            playlist.items.forEach { add(it.localName) }
+            playlist.idleItem?.let { add(it.localName) }
+        }
         mediaDir.listFiles()?.forEach { file ->
             if (file.name !in wanted && !file.name.endsWith(".part")) {
                 file.delete()

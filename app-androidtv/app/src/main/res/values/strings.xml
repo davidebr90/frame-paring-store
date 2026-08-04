@@ -15,4 +15,9 @@
     <string name="status_syncing">Scaricamento contenuti…</string>
     <string name="status_empty">Nessun contenuto assegnato a questo schermo</string>
     <string name="status_revoked">Accesso revocato dal CMS: nuovo pairing necessario</string>
+    <string name="autostart_title">Avvio automatico</string>
+    <string name="autostart_hint">Su questo dispositivo serve un permesso per far ripartire l\'app da sola all\'accensione. Si attiva una volta sola.</string>
+    <string name="autostart_button">Attiva avvio automatico</string>
+    <string name="autostart_done">Avvio automatico attivo: l\'app ripartirà da sola all\'accensione</string>
+    <string name="autostart_manual">Apri Impostazioni → App → Frame Paring Store e attiva "Mostra sopra altre app"</string>
 </resources>

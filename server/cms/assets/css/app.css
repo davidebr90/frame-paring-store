@@ -334,6 +334,29 @@ tr:last-child td { border-bottom: 0; }
 .sort-list li .remove { color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 1.1rem; }
 .sort-list li .remove:hover { color: var(--err); }
 
+/* ---------- Editor fasce orarie ---------- */
+.band-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+}
+.band-row input[type=time] {
+  width: auto; font-family: var(--font-mono); font-size: .9rem;
+  padding: 8px 10px; color-scheme: dark;
+}
+.band-sep { color: var(--muted); }
+.band-row .remove {
+  color: var(--muted); background: none; border: 0;
+  cursor: pointer; font-size: 1.15rem; padding: 2px 6px;
+}
+.band-row .remove:hover { color: var(--err); }
+
+.idle-upload-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+#idle-preview {
+  width: 86px; height: 50px; object-fit: cover;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: #07080a;
+}
+
 /* ---------- Flash / toast ---------- */
 .flash {
   padding: 12px 18px; border-radius: var(--radius-sm);

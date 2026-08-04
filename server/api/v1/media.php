@@ -15,12 +15,18 @@ if ($id < 1) {
     json_error('Parametro id mancante', 422);
 }
 
+// Autorizzato se il media è in una galleria assegnata allo schermo
+// oppure è la sua immagine di cortesia (che può stare in qualsiasi galleria)
 $stmt = db()->prepare('SELECT m.filename, m.mime_type, m.filesize
                        FROM media m
-                       JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
-                       WHERE m.id = ? AND sg.screen_id = ?
+                       WHERE m.id = :id AND (
+                           EXISTS (SELECT 1 FROM screen_galleries sg
+                                   WHERE sg.gallery_id = m.gallery_id AND sg.screen_id = :sid)
+                           OR EXISTS (SELECT 1 FROM screens s
+                                      WHERE s.id = :sid2 AND s.idle_media_id = m.id)
+                       )
                        LIMIT 1');
-$stmt->execute([$id, $screen['id']]);
+$stmt->execute(['id' => $id, 'sid' => $screen['id'], 'sid2' => $screen['id']]);
 $media = $stmt->fetch();
 
 if ($media === false) {

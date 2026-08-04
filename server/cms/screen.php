@@ -34,6 +34,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$name, $inches > 0 ? $inches : null, $orientation, $id]);
             flash_set('ok', 'Impostazioni schermo salvate');
         }
+    } elseif ($do === 'schedule') {
+        $raw = (string) ($_POST['schedule_json'] ?? '[]');
+        $decoded = json_decode($raw, true);
+        $bands = [];
+        if (is_array($decoded)) {
+            foreach ($decoded as $band) {
+                if (isset($band['from'], $band['to'])
+                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $band['from'])
+                    && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $band['to'])
+                    && $band['from'] !== $band['to']) {
+                    $bands[] = ['from' => $band['from'], 'to' => $band['to']];
+                }
+            }
+        }
+        $idleMode = ($_POST['idle_mode'] ?? 'black') === 'image' ? 'image' : 'black';
+        $idleMediaId = (int) ($_POST['idle_media_id'] ?? 0);
+        if ($idleMode === 'image' && $idleMediaId > 0) {
+            $check = $pdo->prepare("SELECT id FROM media WHERE id = ? AND type = 'image'");
+            $check->execute([$idleMediaId]);
+            if ($check->fetchColumn() === false) {
+                $idleMediaId = 0;
+            }
+        }
+        $pdo->prepare('UPDATE screens SET schedule_json = ?, idle_mode = ?, idle_media_id = ? WHERE id = ?')
+            ->execute([
+                $bands ? json_encode($bands) : null,
+                $idleMode,
+                $idleMode === 'image' && $idleMediaId > 0 ? $idleMediaId : null,
+                $id,
+            ]);
+        flash_set('ok', $bands
+            ? 'Programmazione salvata: ' . count($bands) . ' fasce attive'
+            : 'Programmazione rimossa: schermo sempre attivo');
     } elseif ($do === 'revoke') {
         // Il token resta in tabella ma lo status blocca ogni richiesta
         $pdo->prepare("UPDATE screens SET status = 'revoked' WHERE id = ?")->execute([$id]);
@@ -60,6 +93,14 @@ $available = array_filter(
 );
 
 $onlineWindow = (int) config('poll_interval') * 2 + 30;
+
+$scheduleBands = $screen['schedule_json'] !== null
+    ? (json_decode($screen['schedule_json'], true) ?: [])
+    : [];
+$imageMedia = $pdo->query("SELECT m.id, m.original_name, g.name AS gallery_name
+                           FROM media m JOIN galleries g ON g.id = m.gallery_id
+                           WHERE m.type = 'image'
+                           ORDER BY g.name, m.original_name")->fetchAll();
 
 cms_header($screen['name'], 'screens');
 ?>
@@ -139,6 +180,53 @@ cms_header($screen['name'], 'screens');
   <?php if (!$assigned && !$available): ?>
     <p class="hint">Non hai ancora gallerie: <a href="galleries.php">creane una</a>.</p>
   <?php endif; ?>
+</div>
+
+<div class="card">
+  <h2>Accensione programmata</h2>
+  <p class="hint">Senza fasce lo schermo riproduce sempre. Con le fasce, la riproduzione
+  è attiva solo negli orari indicati (una fascia che scavalca la mezzanotte, es.
+  22:00 → 06:00, è valida); fuori fascia lo schermo mostra nero (spento apparente)
+  o un'immagine di cortesia. La TV decide con il proprio orologio: funziona anche offline.</p>
+  <form method="post" id="schedule-form">
+    <?= csrf_field() ?>
+    <input type="hidden" name="do" value="schedule">
+    <input type="hidden" name="schedule_json" id="schedule-json">
+    <div id="bands" data-bands='<?= e(json_encode($scheduleBands)) ?>'></div>
+    <button type="button" class="btn btn-sm" id="band-add" style="margin-top:4px">+ Aggiungi fascia</button>
+    <div class="form-row" style="margin-top:18px">
+      <div class="field">
+        <label for="idle_mode">Fuori fascia mostra</label>
+        <select id="idle_mode" name="idle_mode">
+          <option value="black"<?= $screen['idle_mode'] === 'black' ? ' selected' : '' ?>>Schermo nero (spento apparente)</option>
+          <option value="image"<?= $screen['idle_mode'] === 'image' ? ' selected' : '' ?>>Immagine di cortesia</option>
+        </select>
+      </div>
+      <div class="field" id="idle-media-field">
+        <label for="idle_media_id">Immagine di cortesia</label>
+        <select id="idle_media_id" name="idle_media_id">
+          <option value="">Scegli…</option>
+          <?php foreach ($imageMedia as $m): ?>
+          <option value="<?= (int) $m['id'] ?>"<?= (int) $screen['idle_media_id'] === (int) $m['id'] ? ' selected' : '' ?>>
+            <?= e($m['gallery_name'] . ' — ' . $m['original_name']) ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+        <div class="idle-upload-row">
+          <img id="idle-preview" alt="Anteprima cortesia"
+               src="<?= $screen['idle_media_id'] !== null ? 'media_preview.php?id=' . (int) $screen['idle_media_id'] : '' ?>"
+               <?= $screen['idle_media_id'] === null ? 'style="display:none"' : '' ?>>
+          <button type="button" class="btn btn-sm" id="idle-upload-btn"
+                  data-screen="<?= (int) $screen['id'] ?>">Carica nuova immagine</button>
+          <input type="file" id="idle-upload-input"
+                 accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        </div>
+        <p class="hint" style="margin:8px 0 0">Le immagini caricate qui finiscono nella
+        galleria di servizio "Immagini di cortesia", gestibile come ogni altra galleria.</p>
+      </div>
+      <button class="btn btn-primary" type="submit">Salva programmazione</button>
+    </div>
+  </form>
 </div>
 
 <div class="card">

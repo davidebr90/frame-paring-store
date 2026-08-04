@@ -31,6 +31,12 @@ class MainActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var pairingJob: Job? = null
     private var playbackJob: Job? = null
+    private var scheduleJob: Job? = null
+
+    // Stato della programmazione oraria
+    private var currentPlaylist: Playlist? = null
+    private var isIdle = false
+    private var idleKey: String? = null
 
     private lateinit var pairingPanel: ScrollView
     private lateinit var serverForm: View
@@ -69,8 +75,74 @@ class MainActivity : Activity() {
         serverInput.setText(prefs.baseUrl ?: BuildConfig.DEFAULT_BASE_URL)
         findViewById<Button>(R.id.pairButton).setOnClickListener { startPairing() }
         findViewById<Button>(R.id.claimButton).setOnClickListener { startClaim() }
+        findViewById<Button>(R.id.autostartButton).setOnClickListener { requestAutostartPermission() }
 
         if (prefs.authToken != null) enterPlayerMode() else showPairingPanel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshAutostartPanel()
+    }
+
+    // ---------- avvio automatico (Android 10+) ----------
+
+    // Da Android 10 il sistema blocca le activity avviate dal BootReceiver
+    // a meno che l'app non abbia il permesso "Mostra sopra altre app".
+    // Android NON lo chiede da solo: il bottone porta alla pagina giusta
+    // e sparisce quando il permesso risulta concesso.
+    private fun autostartPermissionNeeded(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 29 &&
+            !android.provider.Settings.canDrawOverlays(this)
+
+    private var autostartRequested = false
+
+    private fun refreshAutostartPanel() {
+        val panel = findViewById<View>(R.id.autostartPanel)
+        val needed = autostartPermissionNeeded()
+        panel.visibility = if (needed) View.VISIBLE else View.GONE
+        if (!needed) {
+            findViewById<View>(R.id.playerAutostartButton).visibility = View.GONE
+        }
+        if (!needed && autostartRequested) {
+            autostartRequested = false
+            toast(getString(R.string.autostart_done))
+        }
+    }
+
+    // In modalità player il pannello di setup non c'è: si mostra un invito
+    // flottante per 20 secondi, azionabile col telecomando
+    private fun showPlayerAutostartHint() {
+        if (!autostartPermissionNeeded()) return
+        val button = findViewById<Button>(R.id.playerAutostartButton)
+        button.visibility = View.VISIBLE
+        button.setOnClickListener { requestAutostartPermission() }
+        button.requestFocus()
+        button.postDelayed({ button.visibility = View.GONE }, 20_000)
+    }
+
+    private fun requestAutostartPermission() {
+        autostartRequested = true
+        val direct = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:$packageName"),
+        )
+        try {
+            startActivity(direct)
+        } catch (_: Exception) {
+            // Alcune TV non espongono la pagina diretta: si passa dai dettagli app
+            try {
+                startActivity(
+                    android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:$packageName"),
+                    )
+                )
+                toast(getString(R.string.autostart_manual))
+            } catch (_: Exception) {
+                toast(getString(R.string.autostart_manual))
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -99,6 +171,9 @@ class MainActivity : Activity() {
 
     private fun showPairingPanel() {
         playbackJob?.cancel()
+        scheduleJob?.cancel()
+        currentPlaylist = null
+        isIdle = false
         playerController.stop()
         playerStatus.visibility = View.GONE
         pairingPanel.visibility = View.VISIBLE
@@ -187,9 +262,39 @@ class MainActivity : Activity() {
 
     // ---------- player + sync periodico ----------
 
+    private fun minuteOfDayNow(): Int {
+        val cal = java.util.Calendar.getInstance()
+        return cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+    }
+
+    // Applica lo stato di programmazione corrente. Ritorna true se in fascia.
+    private fun applySchedule(playlist: Playlist, force: Boolean): Boolean {
+        val active = playlist.isActiveAt(minuteOfDayNow())
+        if (active && (isIdle || force)) {
+            isIdle = false
+            hidePlayerStatus()
+            playerController.play(playlist)
+        } else if (!active && (!isIdle || force)) {
+            isIdle = true
+            hidePlayerStatus()
+            playerController.idle(if (playlist.idleMode == "image") playlist.idleItem else null)
+        }
+        return active
+    }
+
     private fun enterPlayerMode() {
         pairingJob?.cancel()
         pairingPanel.visibility = View.GONE
+        showPlayerAutostartHint()
+
+        // Sentinella oraria: entra/esce dalle fasce anche senza rete
+        scheduleJob?.cancel()
+        scheduleJob = scope.launch {
+            while (isActive) {
+                delay(30_000)
+                currentPlaylist?.let { applySchedule(it, force = false) }
+            }
+        }
 
         playbackJob?.cancel()
         playbackJob = scope.launch {
@@ -203,8 +308,9 @@ class MainActivity : Activity() {
             var playingKey: String? = null
             val cached = sync.cachedPlaylist()
             if (cached != null && cached.items.isNotEmpty()) {
-                playerController.play(cached)
+                currentPlaylist = cached
                 playingKey = playKey(cached)
+                applySchedule(cached, force = true)
             } else {
                 showPlayerStatus(R.string.status_syncing)
             }
@@ -215,12 +321,21 @@ class MainActivity : Activity() {
                     if (fresh != null) {
                         if (fresh.items.isEmpty()) {
                             playerController.stop()
+                            currentPlaylist = null
                             playingKey = null
                             showPlayerStatus(R.string.status_empty)
-                        } else if (playKey(fresh) != playingKey) {
-                            hidePlayerStatus()
-                            playerController.play(fresh)
+                        } else {
+                            // currentPlaylist sempre aggiornata: anche a parità di
+                            // contenuti le fasce orarie possono essere cambiate.
+                            // Se cambia la config di riposo mentre siamo fuori
+                            // fascia, lo stato idle va ridisegnato subito.
+                            currentPlaylist = fresh
+                            val newIdleKey = fresh.idleMode + ":" + (fresh.idleItem?.checksum ?: "")
+                            val idleChanged = newIdleKey != idleKey
+                            idleKey = newIdleKey
+                            val changed = playKey(fresh) != playingKey
                             playingKey = playKey(fresh)
+                            applySchedule(fresh, force = changed || (idleChanged && isIdle))
                         }
                     } else if (playingKey == null) {
                         showPlayerStatus(R.string.status_error)

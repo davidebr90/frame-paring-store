@@ -86,6 +86,71 @@ function confirm_pairing(string $code, string $method): ?int
     return (int) $id;
 }
 
+// Salva un upload del CMS dentro una galleria e registra il media.
+// Validazione MIME dal contenuto reale; con $imagesOnly accetta solo immagini.
+// Ritorna [id, label] del nuovo media; esce con json_error in caso di problemi.
+function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = false): array
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        json_error('Upload fallito (file troppo grande per i limiti PHP dell\'hosting?)', 422);
+    }
+    if ($file['size'] > (int) config('max_upload_bytes')) {
+        json_error('File oltre il limite consentito', 422);
+    }
+
+    $allowed = [
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+        'image/gif' => 'gif', 'video/mp4' => 'mp4', 'video/webm' => 'webm',
+    ];
+    $mime = (string) finfo_file(finfo_open(FILEINFO_MIME_TYPE), $file['tmp_name']);
+    if (!isset($allowed[$mime]) || ($imagesOnly && !str_starts_with($mime, 'image/'))) {
+        json_error('Formato non supportato: ' . $mime, 422);
+    }
+
+    $filename = bin2hex(random_bytes(16)) . '.' . $allowed[$mime];
+    if (!move_uploaded_file($file['tmp_name'], UPLOADS_DIR . '/' . $filename)) {
+        json_error('Impossibile salvare il file (permessi cartella uploads?)', 500);
+    }
+
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE gallery_id = ?');
+    $stmt->execute([$galleryId]);
+    $sortOrder = (int) $stmt->fetchColumn();
+
+    $originalName = mb_substr((string) $file['name'], 0, 255);
+    $pdo->prepare('INSERT INTO media
+                   (gallery_id, type, filename, original_name, mime_type, filesize, checksum, sort_order)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute([
+            $galleryId,
+            str_starts_with($mime, 'image/') ? 'image' : 'video',
+            $filename,
+            $originalName,
+            $mime,
+            $file['size'],
+            sha1_file(UPLOADS_DIR . '/' . $filename),
+            $sortOrder,
+        ]);
+    $newId = (int) $pdo->lastInsertId(); // prima di altri statement
+
+    $pdo->prepare('UPDATE galleries SET updated_at = NOW() WHERE id = ?')->execute([$galleryId]);
+
+    return ['id' => $newId, 'label' => $originalName];
+}
+
+// Galleria di servizio per le immagini di cortesia (creata al primo uso).
+function courtesy_gallery_id(): int
+{
+    $pdo = db();
+    $id = $pdo->query("SELECT id FROM galleries WHERE name = 'Immagini di cortesia' LIMIT 1")
+        ->fetchColumn();
+    if ($id !== false) {
+        return (int) $id;
+    }
+    $pdo->prepare('INSERT INTO galleries (name) VALUES (?)')->execute(['Immagini di cortesia']);
+    return (int) $pdo->lastInsertId();
+}
+
 // Playlist di uno schermo: gallerie assegnate in ordine, media in sort_order.
 // 'version' cambia se cambia qualunque cosa rilevante per il player:
 // l'app la confronta con quella in cache per decidere se aggiornare.
@@ -123,12 +188,51 @@ function playlist_for_screen(array $screen): array
         ];
     }
 
+    // Fasce orarie: la TV le valuta in locale (funziona anche offline).
+    // Nessuna fascia = sempre attivo. Fuori fascia: nero o immagine di cortesia.
+    $bands = [];
+    if ($screen['schedule_json'] !== null) {
+        $decoded = json_decode($screen['schedule_json'], true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $band) {
+                if (isset($band['from'], $band['to'])
+                    && preg_match('/^\d{2}:\d{2}$/', $band['from'])
+                    && preg_match('/^\d{2}:\d{2}$/', $band['to'])) {
+                    $bands[] = ['from' => $band['from'], 'to' => $band['to']];
+                }
+            }
+        }
+    }
+
+    $idleItem = null;
+    if ($screen['idle_mode'] === 'image' && $screen['idle_media_id'] !== null) {
+        $stmt = db()->prepare("SELECT * FROM media WHERE id = ? AND type = 'image'");
+        $stmt->execute([$screen['idle_media_id']]);
+        if (($m = $stmt->fetch()) !== false) {
+            $idleItem = [
+                'id'       => (int) $m['id'],
+                'type'     => 'image',
+                'mime'     => $m['mime_type'],
+                'url'      => config('base_url') . '/api/v1/media.php?id=' . $m['id'] . '&idle=1',
+                'filesize' => (int) $m['filesize'],
+                'checksum' => $m['checksum'],
+                'rotation' => (int) $m['rotation'],
+                'fit'      => $m['fit'],
+            ];
+        }
+    }
+
     return [
         'screen' => [
             'id'          => (int) $screen['id'],
             'name'        => $screen['name'],
             'orientation' => $screen['orientation'],
             'inches'      => $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : null,
+        ],
+        'schedule' => [
+            'bands'     => $bands,
+            'idle_mode' => $screen['idle_mode'],
+            'idle_item' => $idleItem,
         ],
         'version'       => sha1(json_encode($items)),
         'poll_interval' => (int) config('poll_interval'),
