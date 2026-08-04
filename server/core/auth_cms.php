@@ -31,7 +31,9 @@ function current_user(): ?array
     if ($user === false) {
         $user = null;
         if (isset($_SESSION['user_id'])) {
-            $stmt = db()->prepare('SELECT id, username FROM users WHERE id = ?');
+            // is_active: un utente disattivato perde l'accesso all'istante,
+            // anche se ha una sessione aperta
+            $stmt = db()->prepare('SELECT * FROM users WHERE id = ? AND is_active = 1');
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch() ?: null;
         }
@@ -41,7 +43,7 @@ function current_user(): ?array
 
 function attempt_login(string $username, string $password): bool
 {
-    $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ?');
+    $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1');
     $stmt->execute([$username]);
     $row = $stmt->fetch();
 

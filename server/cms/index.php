@@ -30,7 +30,9 @@ cms_header('Dashboard', 'index');
     <h1>Dashboard</h1>
     <div class="sub">Panoramica del sistema</div>
   </div>
+  <?php if (current_can('screen.pair')): ?>
   <a class="btn btn-primary" href="pair.php">+ Associa schermo</a>
+  <?php endif; ?>
 </div>
 
 <div class="grid grid-tiles" style="margin-bottom:26px">
@@ -47,9 +49,11 @@ cms_header('Dashboard', 'index');
 <h2>Schermi</h2>
 <?php if (!$screens): ?>
   <div class="card">
-    <p class="hint" style="margin:0">Nessuno schermo registrato. Apri l'app sulla TV e vai su
-    <a href="pair.php">Pairing</a> per associare il primo, oppure creane uno in
-    <a href="screens.php">Schermi</a> con la configurazione manuale.</p>
+    <p class="hint" style="margin:0">Nessuno schermo registrato.
+    <?php if (current_can('screen.pair')): ?>Apri l'app sulla TV e vai su
+    <a href="pair.php">Pairing</a> per associare il primo<?php if (current_can('screen.manage')): ?>,
+    oppure creane uno in <a href="screens.php">Schermi</a> con la configurazione manuale<?php endif; ?>.
+    <?php endif; ?></p>
   </div>
 <?php else: ?>
   <div class="grid grid-screens">
@@ -81,7 +85,9 @@ cms_header('Dashboard', 'index');
         <?= screen_badge($s, $onlineWindow) ?>
         <span class="hint"><?= $s['last_seen_at'] ? 'visto ' . date('d/m H:i', strtotime($s['last_seen_at'])) : 'mai visto' ?></span>
       </div>
+      <?php if (current_can('screen.manage')): ?>
       <a class="cover" href="screen.php?id=<?= (int) $s['id'] ?>" aria-label="Gestisci <?= e($s['name']) ?>"></a>
+      <?php endif; ?>
     </div>
     <?php endforeach; ?>
   </div>

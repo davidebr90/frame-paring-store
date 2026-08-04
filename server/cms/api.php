@@ -29,6 +29,7 @@ $pdo = db();
 switch ($action) {
 
     case 'upload':
+        require_cap('media.upload');
         $galleryId = (int) ($_POST['gallery_id'] ?? 0);
         $stmt = $pdo->prepare('SELECT id FROM galleries WHERE id = ?');
         $stmt->execute([$galleryId]);
@@ -41,6 +42,7 @@ switch ($action) {
     // Immagine di cortesia: upload nella galleria di servizio e attivazione
     // immediata sullo schermo indicato
     case 'idle_upload':
+        require_cap('schedule.manage');
         $screenId = (int) ($_POST['screen_id'] ?? 0);
         $stmt = $pdo->prepare('SELECT id FROM screens WHERE id = ?');
         $stmt->execute([$screenId]);
@@ -56,6 +58,7 @@ switch ($action) {
         ]);
 
     case 'media_update':
+        require_cap('media.edit');
         $id = (int) ($body['id'] ?? 0);
         $stmt = $pdo->prepare('SELECT gallery_id FROM media WHERE id = ?');
         $stmt->execute([$id]);
@@ -116,6 +119,7 @@ switch ($action) {
         json_out(['ok' => true]);
 
     case 'media_delete':
+        require_cap('media.upload');
         $id = (int) ($body['id'] ?? 0);
         $stmt = $pdo->prepare('SELECT gallery_id, filename FROM media WHERE id = ?');
         $stmt->execute([$id]);
@@ -133,6 +137,7 @@ switch ($action) {
         json_out(['ok' => true]);
 
     case 'media_reorder':
+        require_cap('media.edit');
         $galleryId = (int) ($body['gallery_id'] ?? 0);
         $ids = $body['ids'] ?? null;
         if (!is_array($ids) || !$ids) {
@@ -149,6 +154,7 @@ switch ($action) {
         json_out(['ok' => true]);
 
     case 'screen_galleries':
+        require_cap('screen.manage');
         $screenId = (int) ($body['screen_id'] ?? 0);
         $ids = $body['gallery_ids'] ?? null;
         $stmt = $pdo->prepare('SELECT id FROM screens WHERE id = ?');

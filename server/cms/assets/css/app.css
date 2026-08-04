@@ -357,6 +357,41 @@ tr:last-child td { border-bottom: 0; }
   background: #07080a;
 }
 
+/* ---------- Utenti e permessi ---------- */
+.user-card .user-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.user-card .user-head h2 { margin: 0 0 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.user-card .user-head .hint { margin-top: 2px; }
+.user-form { padding-top: 4px; }
+
+.caps-grid {
+  display: grid; gap: 8px 22px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.caps-grid[hidden], [data-admin-note][hidden] { display: none; }
+
+.check-inline {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-size: .88rem; font-weight: 500; color: var(--text);
+  margin: 0; cursor: pointer;
+}
+.check-inline input[type=checkbox] {
+  width: 16px; height: 16px; accent-color: var(--accent);
+  margin: 0; cursor: pointer;
+}
+
+.cap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px 22px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.cap-list li { display: flex; align-items: center; gap: 9px; font-size: .88rem; }
+.cap-list li.off { color: var(--muted); }
+.cap-list .cap-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+.cap-list li.on .cap-dot { background: var(--ok); box-shadow: 0 0 8px rgba(62, 207, 110, .55); }
+
+a.side-user { color: var(--muted); }
+a.side-user:hover { color: var(--accent); text-decoration: none; }
+
 /* ---------- Flash / toast ---------- */
 .flash {
   padding: 12px 18px; border-radius: var(--radius-sm);

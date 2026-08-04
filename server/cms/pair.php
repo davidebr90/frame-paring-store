@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Conferma del pairing: l'admin digita il PIN mostrato dalla TV,
 // oppure arriva qui dal QR con ?code= precompilato (metodo 'qr').
 require __DIR__ . '/_cms.php';
+require_cap('screen.pair');
 
 $prefill = preg_match('/^\d{6}$/', (string) ($_GET['code'] ?? '')) === 1
     ? (string) $_GET['code']

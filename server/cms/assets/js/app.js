@@ -326,6 +326,18 @@
     });
   }
 
+  /* ---------- Utenti: le capabilities spariscono per il ruolo admin ---------- */
+  document.addEventListener('change', function (ev) {
+    var select = ev.target.closest('[data-role-select]');
+    if (!select) { return; }
+    var form = select.closest('form');
+    var caps = form.querySelector('[data-caps]');
+    var note = form.querySelector('[data-admin-note]');
+    var isAdmin = select.value === 'admin';
+    if (caps) { caps.hidden = isAdmin; }
+    if (note) { note.hidden = !isAdmin; }
+  });
+
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');
   if (pin) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Elenco schermi + creazione "manuale": lo schermo nasce qui nel CMS
 // con una URL di configurazione (claim_token) da inserire nell'app.
 require __DIR__ . '/_cms.php';
+require_cap('screen.manage');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();

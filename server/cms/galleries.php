@@ -1,12 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// La lista è visibile a tutti (serve per caricare i media); creare ed
+// eliminare gallerie richiede gallery.manage
 require __DIR__ . '/_cms.php';
 
 $pdo = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
+    require_cap('gallery.manage');
     $do = (string) ($_POST['do'] ?? '');
 
     if ($do === 'create') {
@@ -54,6 +57,7 @@ cms_header('Gallerie', 'galleries');
   </div>
 </div>
 
+<?php if (current_can('gallery.manage')): ?>
 <div class="card">
   <h2>Nuova galleria</h2>
   <form method="post" class="form-row">
@@ -66,6 +70,7 @@ cms_header('Gallerie', 'galleries');
     <button class="btn btn-primary" type="submit">Crea galleria</button>
   </form>
 </div>
+<?php endif; ?>
 
 <div class="card">
   <h2>Tutte le gallerie</h2>
@@ -85,6 +90,7 @@ cms_header('Gallerie', 'galleries');
         <td class="hint"><?= date('d/m/Y H:i', strtotime($g['updated_at'])) ?></td>
         <td style="text-align:right;white-space:nowrap">
           <a class="btn btn-sm" href="gallery.php?id=<?= (int) $g['id'] ?>">Apri</a>
+          <?php if (current_can('gallery.manage')): ?>
           <form method="post" style="display:inline"
                 onsubmit="return confirm('Eliminare la galleria e tutti i suoi file?')">
             <?= csrf_field() ?>
@@ -92,6 +98,7 @@ cms_header('Gallerie', 'galleries');
             <input type="hidden" name="id" value="<?= (int) $g['id'] ?>">
             <button class="btn btn-sm btn-danger" type="submit">Elimina</button>
           </form>
+          <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>

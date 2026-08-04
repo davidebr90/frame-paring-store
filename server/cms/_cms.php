@@ -5,6 +5,7 @@ declare(strict_types=1);
 // autenticazione (salvo pagine che dichiarano CMS_PUBLIC) e layout.
 require dirname(__DIR__) . '/core/bootstrap.php';
 require dirname(__DIR__) . '/core/auth_cms.php';
+require dirname(__DIR__) . '/core/caps.php';
 
 // Nessuno stack trace verso il browser: un errore PDO mostrerebbe host,
 // utente e password del database nella pagina
@@ -81,12 +82,14 @@ function human_bytes(int $bytes): string
 function cms_header(string $title, string $active = ''): void
 {
     $user = current_user();
-    $nav = [
-        'index'     => ['index.php', 'Dashboard', 'M3 5h18v11H3zM8 20h8'],
-        'screens'   => ['screens.php', 'Schermi', 'M2 6h20v12H2zM12 18v3M8 21h8'],
-        'galleries' => ['galleries.php', 'Gallerie', 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z'],
-        'pair'      => ['pair.php', 'Pairing', 'M7 12h10M12 7v10M12 2a10 10 0 100 20 10 10 0 000-20z'],
-    ];
+    // Voce mostrata solo se l'utente ha la capability corrispondente
+    $nav = array_filter([
+        'index'     => ['index.php', 'Dashboard', 'M3 5h18v11H3zM8 20h8', null],
+        'screens'   => ['screens.php', 'Schermi', 'M2 6h20v12H2zM12 18v3M8 21h8', 'screen.manage'],
+        'galleries' => ['galleries.php', 'Gallerie', 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z', null],
+        'pair'      => ['pair.php', 'Pairing', 'M7 12h10M12 7v10M12 2a10 10 0 100 20 10 10 0 000-20z', 'screen.pair'],
+        'users'     => ['users.php', 'Utenti', 'M16 20v-2a4 4 0 00-8 0v2M12 12a4 4 0 100-8 4 4 0 000 8z', 'users.manage'],
+    ], fn (array $item): bool => $item[3] === null || current_can($item[3]));
     ?><!doctype html>
 <html lang="it">
 <head>
@@ -104,7 +107,7 @@ function cms_header(string $title, string $active = ''): void
 <aside class="side">
   <a class="brand" href="index.php"><span class="brand-led"></span>FRAME&nbsp;PARING&nbsp;<b>STORE</b></a>
   <nav class="nav">
-    <?php foreach ($nav as $key => [$href, $label, $icon]): ?>
+    <?php foreach ($nav as $key => [$href, $label, $icon, $cap]): ?>
     <a href="<?= $href ?>" class="nav-link<?= $key === $active ? ' active' : '' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="<?= $icon ?>"/></svg>
       <span><?= $label ?></span>
@@ -112,7 +115,7 @@ function cms_header(string $title, string $active = ''): void
     <?php endforeach; ?>
   </nav>
   <div class="side-foot">
-    <span class="side-user"><?= e($user['username'] ?? '') ?></span>
+    <a class="side-user" href="profile.php" title="Il tuo profilo"><?= e($user['full_name'] ?: ($user['username'] ?? '')) ?></a>
     <a class="side-logout" href="logout.php" title="Esci">Esci</a>
   </div>
 </aside>

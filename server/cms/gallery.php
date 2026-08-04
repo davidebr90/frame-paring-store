@@ -17,6 +17,7 @@ if ($gallery === false) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
+    require_cap('gallery.manage'); // rinomina e impostazioni di riproduzione
     $do = (string) ($_POST['do'] ?? '');
 
     if ($do === 'rename') {

@@ -24,7 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($password !== $confirm) {
         $error = 'Le password non coincidono';
     } else {
-        db()->prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)')
+        // Il primo utente è sempre amministratore
+        db()->prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')")
             ->execute([$username, password_hash($password, PASSWORD_DEFAULT)]);
         attempt_login($username, $password);
         flash_set('ok', 'Benvenuto! Amministratore creato.');

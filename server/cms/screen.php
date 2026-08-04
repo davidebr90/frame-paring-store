@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Dettaglio schermo: rinomina, gallerie assegnate (drag & drop),
 // URL di configurazione manuale, revoca ed eliminazione.
 require __DIR__ . '/_cms.php';
+require_cap('screen.manage');
 
 $pdo = db();
 $id = (int) ($_GET['id'] ?? 0);

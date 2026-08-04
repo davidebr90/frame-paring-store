@@ -9,10 +9,20 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ------------------------------------------------------------
 -- Utenti amministratori del CMS
 -- ------------------------------------------------------------
+-- role: 'admin' ha sempre tutte le capabilities; 'editor' e 'operator'
+-- partono da un set predefinito, personalizzabile per singolo utente
+-- tramite capabilities_json (NULL = usa il set del ruolo).
 CREATE TABLE `users` (
   `id`            INT UNSIGNED     NOT NULL AUTO_INCREMENT,
   `username`      VARCHAR(50)      NOT NULL,
   `password_hash` VARCHAR(255)     NOT NULL,           -- password_hash() PHP (bcrypt/argon2)
+  `full_name`     VARCHAR(120)     NULL,               -- anagrafica
+  `email`         VARCHAR(190)     NULL,
+  `phone`         VARCHAR(40)      NULL,
+  `note`          VARCHAR(255)     NULL,
+  `role`          ENUM('admin','editor','operator') NOT NULL DEFAULT 'operator',
+  `capabilities_json` TEXT         NULL,               -- override puntuali; NULL = default del ruolo
+  `is_active`     TINYINT(1)       NOT NULL DEFAULT 1, -- disattivazione senza cancellare la storia
   `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_login_at` DATETIME         NULL,
   PRIMARY KEY (`id`),
