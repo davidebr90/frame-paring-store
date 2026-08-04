@@ -12,8 +12,9 @@ android {
         // minSdk 22 = Android 5.1: copre anche i Fire Stick più vecchi (Fire OS 5)
         minSdk = 22
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // Allineata a APP_VERSION di server/core/version.php
+        versionCode = 100
+        versionName = "1.0.0"
 
         // URL del server proposto di default nella schermata di primo avvio
         // (modificabile lì; cambialo qui per pre-configurare le tue build)
