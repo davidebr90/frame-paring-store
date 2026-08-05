@@ -22,6 +22,7 @@ require dirname(__DIR__) . '/core/auth_cms.php';
 require dirname(__DIR__) . '/core/caps.php';
 require dirname(__DIR__) . '/core/trash.php';
 require dirname(__DIR__) . '/core/branding.php';
+require dirname(__DIR__) . '/core/capabilities.php';
 
 // Nessuno stack trace verso il browser: un errore PDO mostrerebbe host,
 // utente e password del database nella pagina
@@ -168,14 +169,29 @@ function cms_header(string $title, string $active = ''): void
             ],
         ],
         [
+            'key'   => 'live',
+            'href'  => 'live.php',
+            'label' => 'Dirette',
+            'icon'  => 'M12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0M5.6 5.6a9 9 0 000 12.8M18.4 5.6a9 9 0 010 12.8',
+            'cap'   => 'screen.manage',
+            'items' => [
+                ['key' => 'live',        'href' => 'live.php',   'label' => 'Sorgenti live',  'cap' => 'screen.manage'],
+                // Bloccata dove il server non ha le capacità necessarie:
+                // resta visibile per far capire cosa offrirebbe
+                ['key' => 'live.webcam', 'href' => 'live_webcam.php', 'label' => 'Diretta webcam',
+                 'cap' => 'screen.manage', 'feature' => 'live.webcam'],
+            ],
+        ],
+        [
             'key'   => 'system',
             'href'  => 'branding.php',
             'label' => 'Sistema',
             'icon'  => 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z',
             'cap'   => 'settings.manage',
             'items' => [
-                ['key' => 'branding',    'href' => 'branding.php',    'label' => 'Personalizzazione', 'cap' => 'settings.manage'],
-                ['key' => 'maintenance', 'href' => 'maintenance.php', 'label' => 'Manutenzione',      'cap' => 'settings.manage'],
+                ['key' => 'branding',     'href' => 'branding.php',     'label' => 'Personalizzazione', 'cap' => 'settings.manage'],
+                ['key' => 'capabilities', 'href' => 'capabilities.php', 'label' => 'Capacità',          'cap' => 'settings.manage'],
+                ['key' => 'maintenance',  'href' => 'maintenance.php',  'label' => 'Manutenzione',      'cap' => 'settings.manage'],
             ],
         ],
     ];
@@ -239,8 +255,19 @@ function cms_header(string $title, string $active = ''): void
     </a>
     <?php if ($section['items'] && $sectionActive): ?>
     <div class="nav-sub">
-      <?php foreach ($section['items'] as $item): ?>
+      <?php foreach ($section['items'] as $item):
+          // Voce legata a una funzionalità non disponibile: resta visibile
+          // ma bloccata, così si capisce cosa offrirebbe
+          $locked = isset($item['feature']) && !feature_available($item['feature']);
+      ?>
+      <?php if ($locked): ?>
+      <a href="#" class="locked" data-feature="<?= e($item['feature']) ?>">
+        <?= $item['label'] ?>
+        <svg class="nav-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </a>
+      <?php else: ?>
       <a href="<?= $item['href'] ?>" class="<?= $active === $item['key'] ? 'active' : '' ?>"><?= $item['label'] ?></a>
+      <?php endif; ?>
       <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -278,6 +305,31 @@ function cms_footer(): void
 </footer>
 </main>
 </div>
+<!-- Diagnostica delle funzioni bloccate: fattuale, mai commerciale -->
+<div class="modal" id="feature-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="feature-modal-title">
+    <h2 id="feature-modal-title"></h2>
+    <p class="hint" data-modal-summary></p>
+    <div data-modal-missing></div>
+    <p class="hint" data-modal-note></p>
+    <div class="form-actions">
+      <a class="btn btn-primary" href="capabilities.php">Vedi tutti i requisiti</a>
+      <button type="button" class="btn" data-modal-close>Chiudi</button>
+    </div>
+  </div>
+</div>
+<script>window.FPS_FEATURES = <?= json_encode(array_map(
+    fn (string $key): array => [
+        'label'     => FEATURES[$key]['label'],
+        'summary'   => FEATURES[$key]['summary'],
+        'available' => feature_available($key),
+        'missing'   => array_values(array_map(
+            fn (array $c): array => ['label' => $c['label'], 'detail' => $c['detail'], 'howto' => $c['howto']],
+            feature_missing($key)
+        )),
+    ],
+    array_combine(array_keys(FEATURES), array_keys(FEATURES))
+), JSON_UNESCAPED_UNICODE) ?>;</script>
 <script src="assets/js/sortable.min.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/preview.js"></script>

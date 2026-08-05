@@ -427,6 +427,69 @@ tr:last-child td { border-bottom: 0; }
 .sort-list li .remove { color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 1.1rem; }
 .sort-list li .remove:hover { color: var(--err); }
 
+/* ---------- Voci di menu bloccate ---------- */
+.nav-sub a.locked {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  color: #5a6272; cursor: pointer;
+}
+.nav-sub a.locked:hover { color: var(--muted); background: var(--panel-2); }
+.nav-sub a.locked::before { background: var(--line-soft); }
+.nav-lock { width: 13px; height: 13px; flex: none; opacity: .75; }
+
+/* ---------- Modale ---------- */
+.modal {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(6, 8, 11, .75); backdrop-filter: blur(3px);
+  animation: modal-in .16s ease both;
+}
+.modal[hidden] { display: none; }
+@keyframes modal-in { from { opacity: 0; } }
+.modal-card {
+  width: 100%; max-width: 560px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 26px 28px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+  animation: rise .2s ease both;
+}
+.modal-card h2 { font-size: 1.12rem; margin: 0 0 10px; }
+.modal-card .form-actions { margin-top: 22px; }
+
+/* Righe dei requisiti mancanti */
+.req-line {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 11px 14px; margin-top: 10px;
+  background: var(--panel-2); border-radius: var(--radius-sm);
+  border-left: 3px solid var(--err);
+  font-size: .88rem;
+}
+.req-mark { color: var(--err); font-weight: 700; line-height: 1.4; }
+.req-howto { margin-top: 4px; font-size: .8rem; }
+
+/* ---------- Capacità: card delle funzionalità ---------- */
+.feature-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.feature-card {
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--radius); padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.feature-card.is-locked { opacity: .82; }
+.feature-head { display: flex; align-items: flex-start; gap: 14px; }
+.feature-head h3 { margin: 0 0 4px; font-size: .98rem; }
+.feature-head .hint { margin: 0; }
+.feature-head .badge { margin-left: auto; flex: none; }
+.feature-icon {
+  width: 36px; height: 36px; flex: none; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--muted);
+}
+.feature-card.is-available .feature-icon { color: var(--ok); border-color: rgba(62, 207, 110, .35); }
+.feature-icon svg { width: 17px; height: 17px; }
+.feature-missing { font-size: .86rem; }
+.feature-missing > strong { font-size: .82rem; color: var(--muted); }
+
 /* ---------- Manutenzione ---------- */
 .info-grid {
   display: grid; grid-template-columns: auto 1fr; gap: 10px 24px; margin: 0;

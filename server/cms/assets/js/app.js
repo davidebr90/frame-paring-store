@@ -358,6 +358,71 @@
     }
   });
 
+  /* ---------- Funzioni bloccate: diagnostica dei requisiti ---------- */
+  var featureModal = document.getElementById('feature-modal');
+  if (featureModal) {
+    var lastFocused = null;
+
+    function openFeatureModal(key) {
+      var data = (window.FPS_FEATURES || {})[key];
+      if (!data) { return; }
+      lastFocused = document.activeElement;
+      featureModal.querySelector('#feature-modal-title').textContent =
+        data.label + ' — non disponibile su questa installazione';
+      featureModal.querySelector('[data-modal-summary]').textContent = data.summary;
+
+      var box = featureModal.querySelector('[data-modal-missing]');
+      box.innerHTML = '';
+      data.missing.forEach(function (m) {
+        var row = document.createElement('div');
+        row.className = 'req-line';
+        var mark = document.createElement('span');
+        mark.className = 'req-mark';
+        mark.textContent = '✕';
+        var text = document.createElement('span');
+        var strong = document.createElement('strong');
+        strong.textContent = m.label + ': ';
+        var detail = document.createElement('span');
+        detail.className = 'hint';
+        detail.textContent = m.detail;
+        text.append(strong, detail);
+        if (m.howto) {
+          var howto = document.createElement('div');
+          howto.className = 'hint req-howto';
+          howto.textContent = m.howto;
+          text.appendChild(howto);
+        }
+        row.append(mark, text);
+        box.appendChild(row);
+      });
+
+      featureModal.querySelector('[data-modal-note]').textContent =
+        'Le altre funzioni del sistema continuano a lavorare normalmente.';
+      featureModal.hidden = false;
+      featureModal.querySelector('[data-modal-close]').focus();
+    }
+
+    function closeFeatureModal() {
+      featureModal.hidden = true;
+      if (lastFocused) { lastFocused.focus(); }
+    }
+
+    document.addEventListener('click', function (ev) {
+      var locked = ev.target.closest('[data-feature]');
+      if (locked) {
+        ev.preventDefault();
+        openFeatureModal(locked.dataset.feature);
+        return;
+      }
+      if (ev.target.closest('[data-modal-close]') || ev.target === featureModal) {
+        closeFeatureModal();
+      }
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && !featureModal.hidden) { closeFeatureModal(); }
+    });
+  }
+
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');
   if (pin) {
