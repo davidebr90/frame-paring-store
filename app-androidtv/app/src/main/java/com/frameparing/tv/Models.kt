@@ -200,7 +200,6 @@ data class Banner(
 }
 
 data class Playlist(
-    val screenName: String,
     val version: String,
     val pollInterval: Int,
     val items: List<PlaylistItem>,
@@ -268,7 +267,6 @@ data class Playlist(
             }
 
             return Playlist(
-                screenName = root.getJSONObject("screen").getString("name"),
                 version = root.getString("version"),
                 pollInterval = root.getInt("poll_interval"),
                 items = items,

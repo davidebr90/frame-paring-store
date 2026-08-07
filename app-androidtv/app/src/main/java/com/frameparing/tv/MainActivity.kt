@@ -610,7 +610,6 @@ class MainActivity : Activity() {
                 galleryAnchor = override.parsedAtRealtime - override.elapsedSeconds * 1_000L
                 playerController.playSynced(
                     Playlist(
-                        screenName = pieno.galleryName,
                         version = "live-${override.id}-${override.itemsSig}",
                         pollInterval = prefs.pollInterval,
                         items = pronti,
@@ -704,18 +703,15 @@ class MainActivity : Activity() {
             android.util.Log.i("FPS", "Diretta: deriva di ${deriva} ms, riallineo")
             playerController.playSynced(
                 Playlist(
-                    screenName = "",
                     version = "live-realign",
                     pollInterval = prefs.pollInterval,
-                    items = playerControllerItems() ?: return,
+                    items = playerController.currentItems() ?: return,
                 ),
                 slots,
                 galleryAnchor,
             )
         }
     }
-
-    private fun playerControllerItems(): List<PlaylistItem>? = playerController.currentItems()
 
     // Elenco completo di una diretta su galleria: sta nella playlist, che
     // lo porta per intero (state.php manda solo l'impronta)

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Frame Paring Store</string>
-    <string name="setup_title">FRAME PARING STORE</string>
+    <!-- Nome del prodotto: uguale in ogni lingua -->
+    <string name="app_name" translatable="false">Frame Paring Store</string>
+    <string name="setup_title" translatable="false">FRAME PARING STORE</string>
     <string name="setup_subtitle">Configurazione schermo</string>
     <string name="server_hint">URL del server (es. https://tuodominio.it/signage)</string>
     <string name="start_pairing">Genera codice di pairing</string>
     <string name="pairing_wait">Inserisci questo codice nel CMS, oppure scansiona il QR</string>
-    <string name="pairing_expired">Codice scaduto, ne sto generando uno nuovo…</string>
     <string name="pairing_countdown">Il codice si rinnova tra %1$d:%2$02d</string>
     <string name="pairing_renewing">Rinnovo del codice in corso…</string>
     <string name="manual_title">Configurazione manuale</string>

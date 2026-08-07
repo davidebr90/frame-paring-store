@@ -47,6 +47,19 @@ bastano i soliti pochi secondi per schermo. Nessuna modifica alle tabelle.
   battito invece che una volta sola; e se non c'è alcuna playlist da
   riprendere ora compare «Nessun contenuto» invece di uno schermo nero
   senza spiegazioni
+- Su Android 5–9 (Fire OS 5–7 inclusi) la lettura della durata dei video
+  per le dirette su galleria mandava in crash l'app: l'API usata per
+  chiudere il lettore di metadati esiste solo da Android 10. Ora la
+  risorsa si rilascia esplicitamente, su ogni versione.
+
+### Modificato
+
+- Pulizia interna: rimossi una funzione mai chiamata su ciascun lato
+  (server e app), 23 chiavi di traduzione orfane per lingua, tre regole
+  CSS senza più alcun elemento e una risorsa stringa inutilizzata; i due
+  endpoint che servono i loghi ora passano dallo stesso streaming a
+  blocchi dei media (prima reimplementavano l'invio a mano, senza la
+  protezione contro i client lenti)
 
 ## [1.5.0] — 2026-08-06
 

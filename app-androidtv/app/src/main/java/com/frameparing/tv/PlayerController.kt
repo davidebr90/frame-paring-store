@@ -440,6 +440,10 @@ class PlayerController(
     // sì: con la taratura di serie, pensata per il mobile, la riproduzione
     // parte dopo appena 2,5 s di buffer e un calo di banda basta a farla
     // scattare. Su un pannello in vetrina non è accettabile.
+    // Le API di taratura del buffer sono marcate instabili da Media3: la
+    // versione della libreria è bloccata nel build.gradle, quindi il
+    // contratto non cambia sotto i piedi.
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun streamingPlayer(): ExoPlayer = streamPlayer ?: ExoPlayer.Builder(context)
         .setLoadControl(
             DefaultLoadControl.Builder()

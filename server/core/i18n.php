@@ -116,13 +116,6 @@ function t(string $key, array $params = []): string
     return $text;
 }
 
-// Forma singolare o plurale secondo la quantità. La quantità è disponibile
-// come segnaposto :n in entrambe le forme.
-function tn(string $keySingular, string $keyPlural, int $count, array $params = []): string
-{
-    return t($count === 1 ? $keySingular : $keyPlural, ['n' => $count] + $params);
-}
-
 // Elenco delle lingue disponibili, per il selettore
 function lang_options(): array
 {

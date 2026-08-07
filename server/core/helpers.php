@@ -89,7 +89,7 @@ function bearer_token(): ?string
 // Streaming di un file a blocchi con flush esplicito: readfile()+exit può
 // troncare la coda della risposta con client lenti (il server chiude prima
 // che il socket sia drenato). Qui la backpressure TCP regola il ritmo.
-function stream_file(string $path, string $mime): void
+function stream_file(string $path, string $mime, string $cacheControl = 'private, max-age=0'): void
 {
     if (function_exists('set_time_limit')) {
         set_time_limit(0);
@@ -99,7 +99,7 @@ function stream_file(string $path, string $mime): void
     }
     header('Content-Type: ' . $mime);
     header('Content-Length: ' . filesize($path));
-    header('Cache-Control: private, max-age=0');
+    header('Cache-Control: ' . $cacheControl);
 
     $fh = fopen($path, 'rb');
     if ($fh === false) {

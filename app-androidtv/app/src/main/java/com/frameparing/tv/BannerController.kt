@@ -136,15 +136,6 @@ class BannerController(
         host.visibility = View.GONE
     }
 
-    fun showAgainIfConfigured() {
-        if (banner != null) {
-            host.visibility = View.VISIBLE
-            updateText()
-            handler.removeCallbacks(tick)
-            handler.postDelayed(tick, TICK_MS)
-        }
-    }
-
     private fun updateText() {
         val config = banner ?: return
         val view = label ?: return

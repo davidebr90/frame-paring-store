@@ -10,7 +10,6 @@
     <string name="server_hint">Server URL (e.g. https://yourdomain.com/signage)</string>
     <string name="start_pairing">Generate pairing code</string>
     <string name="pairing_wait">Enter this code in the CMS, or scan the QR code</string>
-    <string name="pairing_expired">Code expired, generating a new one…</string>
     <string name="pairing_countdown">The code renews in %1$d:%2$02d</string>
     <string name="pairing_renewing">Renewing the code…</string>
     <string name="manual_title">Manual configuration</string>

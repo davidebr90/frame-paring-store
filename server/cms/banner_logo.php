@@ -30,7 +30,4 @@ if (!str_starts_with($mime, 'image/')) {
     exit;
 }
 
-header('Content-Type: ' . $mime);
-header('Content-Length: ' . filesize($path));
-header('Cache-Control: private, max-age=86400');
-readfile($path);
+stream_file($path, $mime, 'private, max-age=86400');

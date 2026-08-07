@@ -108,12 +108,6 @@ function overlay_logo_file(): ?string
     return overlay_logo_path(overlay());
 }
 
-// Il banner generale ha senso solo se attivo e se mostra almeno qualcosa
-function overlay_active(): bool
-{
-    return overlay_settings_active(overlay());
-}
-
 // Anteprima testuale per il CMS, con le stesse regole che applica la TV
 function overlay_sample_text(?array $settings = null): string
 {

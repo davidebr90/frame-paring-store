@@ -99,14 +99,17 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
     fun probeVideoDurationMs(item: PlaylistItem): Long? {
         val file = localFile(item)
         if (!file.exists()) return null
+        // Niente use{}: MediaMetadataRetriever è AutoCloseable solo da API 29
+        // e qui si arriva fino ad API 22 (Fire OS 5)
+        val retriever = MediaMetadataRetriever()
         return try {
-            MediaMetadataRetriever().use { r ->
-                r.setDataSource(file.path)
-                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-            }
+            retriever.setDataSource(file.path)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
         } catch (e: Exception) {
             android.util.Log.w("FPS", "Durata di ${item.id} non leggibile", e)
             null
+        } finally {
+            runCatching { retriever.release() }
         }
     }
 
