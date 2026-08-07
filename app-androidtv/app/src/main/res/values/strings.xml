@@ -35,4 +35,21 @@
     <string name="settings_saved">Indirizzo salvato: lo schermo va riassociato al nuovo server</string>
     <string name="settings_state_paired">Associato</string>
     <string name="settings_state_unpaired">Non associato</string>
+
+    <!-- Nomi dei mesi per il banner in sovraimpressione: qui, non nel codice,
+         così seguono la lingua scelta nel CMS come tutto il resto -->
+    <string-array name="months">
+        <item>Gennaio</item>
+        <item>Febbraio</item>
+        <item>Marzo</item>
+        <item>Aprile</item>
+        <item>Maggio</item>
+        <item>Giugno</item>
+        <item>Luglio</item>
+        <item>Agosto</item>
+        <item>Settembre</item>
+        <item>Ottobre</item>
+        <item>Novembre</item>
+        <item>Dicembre</item>
+    </string-array>
 </resources>

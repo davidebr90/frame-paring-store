@@ -6,21 +6,23 @@ declare(strict_types=1);
 // evita di restare chiusi fuori dal proprio pannello). Gli altri ruoli
 // partono dal set predefinito, sovrascrivibile per singolo utente.
 
+// Le costanti elencano i permessi; le etichette leggibili stanno nei
+// cataloghi delle traduzioni e si ottengono con cap_label()/role_label().
 const CAPABILITIES = [
-    'media.upload'    => 'Caricare ed eliminare media',
-    'media.edit'      => 'Modificare metadati e ordine dei media',
-    'gallery.manage'  => 'Creare ed eliminare gallerie',
-    'screen.pair'     => 'Associare nuovi schermi',
-    'screen.manage'   => 'Gestire schermi (nome, gallerie, revoca)',
-    'schedule.manage' => 'Gestire fasce orarie e immagini di cortesia',
-    'users.manage'    => 'Gestire utenti e permessi',
-    'settings.manage' => 'Impostazioni di sistema',
+    'media.upload'    => 'cap.media.upload',
+    'media.edit'      => 'cap.media.edit',
+    'gallery.manage'  => 'cap.gallery.manage',
+    'screen.pair'     => 'cap.screen.pair',
+    'screen.manage'   => 'cap.screen.manage',
+    'schedule.manage' => 'cap.schedule.manage',
+    'users.manage'    => 'cap.users.manage',
+    'settings.manage' => 'cap.settings.manage',
 ];
 
 const ROLE_LABELS = [
-    'admin'    => 'Amministratore',
-    'editor'   => 'Editor',
-    'operator' => 'Operatore',
+    'admin'    => 'role.admin',
+    'editor'   => 'role.editor',
+    'operator' => 'role.operator',
 ];
 
 const ROLE_CAPABILITIES = [
@@ -71,4 +73,26 @@ function require_cap(string $capability): void
     }
     flash_set('err', 'Non hai i permessi per questa operazione');
     redirect('index.php');
+}
+
+// Etichette leggibili, tradotte nella lingua in uso
+function cap_label(string $key): string
+{
+    return isset(CAPABILITIES[$key]) ? t(CAPABILITIES[$key]) : $key;
+}
+
+function role_label(string $role): string
+{
+    return isset(ROLE_LABELS[$role]) ? t(ROLE_LABELS[$role]) : $role;
+}
+
+// Elenco permessi => etichetta, nell'ordine di dichiarazione
+function capability_labels(): array
+{
+    return array_map(fn (string $k): string => t($k), CAPABILITIES);
+}
+
+function role_label_list(): array
+{
+    return array_map(fn (string $k): string => t($k), ROLE_LABELS);
 }

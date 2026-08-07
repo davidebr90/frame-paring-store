@@ -23,18 +23,18 @@ declare(strict_types=1);
 // Ogni funzionalità dichiara quali controlli le servono.
 const FEATURES = [
     'live.sync' => [
-        'label'    => 'Diretta sincronizzata da file',
-        'summary'  => 'Lo stesso contenuto parte insieme su più schermi. Nessun requisito particolare.',
+        'label'    => 'feat.live.sync.label',
+        'summary'  => 'feat.live.sync.sum',
         'requires' => [],
     ],
     'live.external' => [
-        'label'    => 'Sorgente esterna (HLS, DASH, RTSP)',
-        'summary'  => 'Ritrasmette un flusso già esistente: telecamera IP, diretta di un servizio esterno.',
+        'label'    => 'feat.live.external.label',
+        'summary'  => 'feat.live.external.sum',
         'requires' => [],
     ],
     'live.webcam' => [
-        'label'    => 'Diretta da webcam e microfono',
-        'summary'  => 'Riceve un flusso dal tuo computer e lo distribuisce agli schermi.',
+        'label'    => 'feat.live.webcam.label',
+        'summary'  => 'feat.live.webcam.sum',
         'requires' => ['exec', 'ffmpeg', 'long_running'],
     ],
 ];
@@ -72,44 +72,59 @@ function capability_checks(): array
     $maxExec = (int) ini_get('max_execution_time');
     $memory  = ini_get('memory_limit');
 
+    // Si memorizzano CHIAVI di traduzione, non testo: il risultato finisce
+    // in cache per un giorno e deve restare valido in qualunque lingua.
+    // 'detail_raw' è per i valori tecnici, che non si traducono.
     return [
         'exec' => [
-            'label'  => 'Esecuzione di programmi esterni',
-            'ok'     => $execAvailable,
-            'detail' => $execAvailable
-                ? 'exec e proc_open disponibili'
-                : 'exec/proc_open disabilitate dalla configurazione PHP',
-            'howto'  => 'Su hosting condiviso sono quasi sempre bloccate per sicurezza. '
-                      . 'Su un server proprio si abilitano rimuovendole da disable_functions in php.ini.',
+            'label'      => 'chk.exec.label',
+            'ok'         => $execAvailable,
+            'detail_key' => $execAvailable ? 'chk.exec.ok' : 'chk.exec.ko',
+            'howto'      => 'chk.exec.howto',
         ],
         'ffmpeg' => [
-            'label'  => 'ffmpeg',
-            'ok'     => $ffmpegPath !== null,
-            'detail' => $ffmpegPath !== null
-                ? $ffmpegVersion . ' (' . $ffmpegPath . ')'
-                : ($execAvailable ? 'non trovato nel sistema' : 'non verificabile senza exec'),
-            'howto'  => 'Necessario per trattare i flussi video. Su Debian/Ubuntu: apt install ffmpeg',
+            'label'      => 'chk.ffmpeg.label',
+            'ok'         => $ffmpegPath !== null,
+            'detail_raw' => $ffmpegPath !== null ? $ffmpegVersion . ' (' . $ffmpegPath . ')' : null,
+            'detail_key' => $ffmpegPath !== null
+                ? null
+                : ($execAvailable ? 'chk.ffmpeg.missing' : 'chk.ffmpeg.unknown'),
+            'howto'      => 'chk.ffmpeg.howto',
         ],
         'long_running' => [
-            'label'  => 'Operazioni prolungate',
-            'ok'     => $maxExec === 0 || $maxExec >= 300,
-            'detail' => $maxExec === 0
-                ? 'nessun limite di durata'
-                : "limite di $maxExec secondi per richiesta",
-            'howto'  => 'Serve max_execution_time pari a 0 (illimitato) o almeno 300 secondi.',
+            'label'         => 'chk.long.label',
+            'ok'            => $maxExec === 0 || $maxExec >= 300,
+            'detail_key'    => $maxExec === 0 ? 'chk.long.unlimited' : 'chk.long.limited',
+            'detail_params' => ['n' => $maxExec],
+            'howto'         => 'chk.long.howto',
         ],
         'memory' => [
-            'label'  => 'Memoria disponibile a PHP',
-            'ok'     => true, // informativo
-            'detail' => (string) $memory,
-            'howto'  => '',
+            'label'      => 'chk.memory.label',
+            'ok'         => true, // informativo
+            'detail_raw' => (string) $memory,
+            'howto'      => null,
         ],
         'uploads_writable' => [
-            'label'  => 'Cartella dei media scrivibile',
-            'ok'     => is_writable(UPLOADS_DIR),
-            'detail' => is_writable(UPLOADS_DIR) ? 'scrivibile' : 'NON scrivibile',
-            'howto'  => 'Imposta i permessi della cartella uploads/ a 755 (o 775) dal client FTP.',
+            'label'      => 'chk.uploads.label',
+            'ok'         => is_writable(UPLOADS_DIR),
+            'detail_key' => is_writable(UPLOADS_DIR) ? 'chk.uploads.ok' : 'chk.uploads.ko',
+            'howto'      => 'chk.uploads.howto',
         ],
+    ];
+}
+
+// Traduce un controllo per la visualizzazione. Va applicata al momento di
+// stampare, MAI prima della cache: la lingua può cambiare in ogni istante.
+function capability_view(array $check): array
+{
+    return [
+        'label'  => t((string) $check['label']),
+        'ok'     => (bool) $check['ok'],
+        'detail' => $check['detail_raw']
+            ?? (isset($check['detail_key']) && $check['detail_key'] !== null
+                ? t((string) $check['detail_key'], $check['detail_params'] ?? [])
+                : ''),
+        'howto'  => $check['howto'] !== null ? t((string) $check['howto']) : '',
     ];
 }
 
@@ -177,11 +192,10 @@ function require_feature(string $feature): void
     if (feature_available($feature)) {
         return;
     }
-    $label = FEATURES[$feature]['label'] ?? $feature;
+    $label = isset(FEATURES[$feature]) ? t(FEATURES[$feature]['label']) : $feature;
     if (str_ends_with($_SERVER['SCRIPT_NAME'] ?? '', 'api.php')) {
-        json_error("Funzione non disponibile su questa installazione: $label", 409);
+        json_error(t('feat.unavailable_api', ['label' => $label]), 409);
     }
-    flash_set('err', "\"$label\" non è disponibile su questa installazione. "
-        . 'Controlla i requisiti in Sistema → Capacità.');
+    flash_set('err', t('feat.unavailable', ['label' => $label]));
     redirect('capabilities.php');
 }

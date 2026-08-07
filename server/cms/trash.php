@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Cestino: media e gallerie eliminati, con ripristino, svuotamento
 // manuale e regola di conservazione automatica.
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 require_cap('media.upload');
 
 $pdo = db();
@@ -15,42 +15,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($do === 'restore_media') {
         restore_media($id);
-        flash_set('ok', 'File ripristinato');
+        flash_set('ok', t('trs.media_restored'));
     } elseif ($do === 'restore_gallery') {
         restore_gallery($id);
-        flash_set('ok', 'Galleria ripristinata con i suoi file');
+        flash_set('ok', t('trs.gal_restored'));
     } elseif ($do === 'purge_media') {
         $r = purge_trash($id);
-        flash_set('ok', 'File eliminato definitivamente (' . human_bytes($r['bytes']) . ' liberati)');
+        flash_set('ok', t('trs.media_purged', ['size' => human_bytes($r['bytes'])]));
     } elseif ($do === 'purge_gallery') {
         $r = purge_trash(null, $id);
-        flash_set('ok', 'Galleria eliminata definitivamente: ' . $r['media'] . ' file, '
-            . human_bytes($r['bytes']) . ' liberati');
+        flash_set('ok', t('trs.gal_purged', ['files' => $r['media'], 'size' => human_bytes($r['bytes'])]));
     } elseif ($do === 'restore_user') {
         require_cap('users.manage');
         restore_user($id);
-        flash_set('ok', 'Utente ripristinato: resta disattivato finché non lo riabiliti');
+        flash_set('ok', t('trs.user_restored'));
     } elseif ($do === 'purge_user') {
         require_cap('users.manage');
         purge_user($id);
-        flash_set('ok', 'Utente eliminato definitivamente');
+        flash_set('ok', t('trs.user_purged'));
     } elseif ($do === 'empty') {
         $r = purge_trash();
         if (current_can('users.manage')) {
             $pdo->query('DELETE FROM users WHERE deleted_at IS NOT NULL');
         }
-        flash_set('ok', 'Cestino svuotato: ' . $r['media'] . ' file e ' . $r['galleries']
-            . ' gallerie eliminati, ' . human_bytes($r['bytes']) . ' liberati');
+        flash_set('ok', t('trs.emptied', [
+            'files' => $r['media'], 'galleries' => $r['galleries'], 'size' => human_bytes($r['bytes']),
+        ]));
     } elseif ($do === 'retention') {
         require_cap('settings.manage');
         $days = (int) ($_POST['days'] ?? -1);
         if ($days < 0 || $days > 3650) {
-            flash_set('err', 'Valore non valido (0-3650 giorni)');
+            flash_set('err', t('trs.err_days'));
         } else {
             setting_set('trash_retention_days', (string) $days);
             flash_set('ok', $days > 0
-                ? "Gli elementi nel cestino verranno eliminati dopo $days giorni"
-                : 'Conservazione illimitata: il cestino non si svuoterà da solo');
+                ? t('trs.days_saved', ['n' => $days])
+                : t('trs.days_forever'));
         }
     }
     redirect('trash.php');
@@ -87,58 +87,59 @@ if (current_can('users.manage')) {
                                  ORDER BY u.deleted_at DESC')->fetchAll();
 }
 
-cms_header('Cestino', 'trash');
+cms_header(t('trs.title'), 'trash');
 ?>
 <div class="main-head">
   <div>
-    <h1>Cestino</h1>
+    <h1><?= e(t('trs.title')) ?></h1>
     <div class="sub">
-      <?= (int) $totals['n'] ?> file · <?= human_bytes((int) $totals['bytes']) ?> occupati ·
-      <?= $retention > 0 ? "eliminazione automatica dopo $retention giorni" : 'conservazione illimitata' ?>
+      <?= e(t('trs.subtitle', [
+        'n'         => (int) $totals['n'],
+        'size'      => human_bytes((int) $totals['bytes']),
+        'retention' => $retention > 0
+            ? t('trs.retention_days', ['n' => $retention])
+            : t('trs.retention_forever'),
+      ])) ?>
     </div>
   </div>
   <?php if ($galleries || $media): ?>
-  <form method="post" onsubmit="return confirm('Svuotare il cestino? I file verranno eliminati definitivamente dal server.')">
+  <form method="post" onsubmit="return confirm('<?= e(t('trs.empty_confirm')) ?>')">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="empty">
-    <button class="btn btn-danger" type="submit">Svuota cestino</button>
+    <button class="btn btn-danger" type="submit"><?= e(t('trs.empty_btn')) ?></button>
   </form>
   <?php endif; ?>
 </div>
 
 <?php if (current_can('settings.manage')): ?>
 <div class="card">
-  <h2>Conservazione automatica</h2>
-  <p class="hint">Gli elementi nel cestino da più giorni di quelli indicati vengono
-  eliminati definitivamente e lo spazio viene liberato. Imposta <strong>0</strong>
-  per conservarli finché non svuoti il cestino a mano.</p>
+  <h2><?= e(t('trs.retention')) ?></h2>
+  <p class="hint"><?= t('trs.retention_hint', ['zero' => '<strong>0</strong>']) ?></p>
   <form method="post" class="form-row">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="retention">
     <div class="field" style="max-width:220px">
-      <label for="days">Elimina dopo (giorni)</label>
+      <label for="days"><?= e(t('trs.delete_after')) ?></label>
       <input type="number" id="days" name="days" min="0" max="3650" value="<?= $retention ?>">
     </div>
-    <button class="btn" type="submit">Salva</button>
+    <button class="btn" type="submit"><?= e(t('common.save')) ?></button>
   </form>
 </div>
 <?php endif; ?>
 
 <?php if (!$galleries && !$media && !$trashedUsers): ?>
 <div class="card">
-  <p class="hint" style="margin:0">Il cestino è vuoto. File, gallerie e utenti che elimini
-  finiscono qui e restano ripristinabili.</p>
+  <p class="hint" style="margin:0"><?= e(t('trs.is_empty')) ?></p>
 </div>
 <?php endif; ?>
 
 <?php if ($trashedUsers): ?>
 <div class="card">
-  <h2>Utenti eliminati</h2>
-  <p class="hint">Al ripristino l'utente torna visibile ma <strong>disattivato</strong>:
-  dovrai riabilitarne l'accesso di proposito.</p>
+  <h2><?= e(t('trs.users')) ?></h2>
+  <p class="hint"><?= t('trs.users_hint', ['disabled' => '<strong>' . e(t('trs.users_disabled')) . '</strong>']) ?></p>
   <div class="table-wrap">
     <table class="user-table">
-      <thead><tr><th>Utente</th><th>Ruolo</th><th>Email</th><th>Eliminato</th><th>Da</th><th></th></tr></thead>
+      <thead><tr><th><?= e(t('usr.th_user')) ?></th><th><?= e(t('usr.role')) ?></th><th><?= e(t('usr.th_email')) ?></th><th><?= e(t('trs.th_deleted_m')) ?></th><th><?= e(t('trs.th_by')) ?></th><th></th></tr></thead>
       <tbody>
       <?php foreach ($trashedUsers as $u): ?>
         <tr class="role-<?= e($u['role']) ?>">
@@ -151,7 +152,7 @@ cms_header('Cestino', 'trash');
               </div>
             </div>
           </td>
-          <td><span class="role-chip"><?= e(ROLE_LABELS[$u['role']] ?? $u['role']) ?></span></td>
+          <td><span class="role-chip"><?= e(role_label($u['role'])) ?></span></td>
           <td class="hint"><?= $u['email'] ? e($u['email']) : '—' ?></td>
           <td class="hint"><?= date('d/m/Y H:i', strtotime($u['deleted_at'])) ?></td>
           <td class="hint"><?= e($u['deleted_by_name'] ?? '—') ?></td>
@@ -160,14 +161,14 @@ cms_header('Cestino', 'trash');
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="restore_user">
               <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-              <button class="btn btn-sm" type="submit">Ripristina</button>
+              <button class="btn btn-sm" type="submit"><?= e(t('common.restore')) ?></button>
             </form>
             <form method="post" style="display:inline"
-                  onsubmit="return confirm('Eliminare definitivamente questo utente?')">
+                  onsubmit="return confirm('<?= e(t('trs.purge_user_confirm')) ?>')">
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="purge_user">
               <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-              <button class="btn btn-sm btn-danger" type="submit">Elimina per sempre</button>
+              <button class="btn btn-sm btn-danger" type="submit"><?= e(t('trs.purge_forever')) ?></button>
             </form>
           </td>
         </tr>
@@ -180,10 +181,10 @@ cms_header('Cestino', 'trash');
 
 <?php if ($galleries): ?>
 <div class="card">
-  <h2>Gallerie eliminate</h2>
+  <h2><?= e(t('trs.galleries')) ?></h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Galleria</th><th>File</th><th>Peso</th><th>Eliminata</th><th>Da</th><th></th></tr></thead>
+      <thead><tr><th><?= e(t('trs.th_gallery')) ?></th><th><?= e(t('trs.th_files')) ?></th><th><?= e(t('gal.th_size')) ?></th><th><?= e(t('trs.th_deleted_f')) ?></th><th><?= e(t('trs.th_by')) ?></th><th></th></tr></thead>
       <tbody>
       <?php foreach ($galleries as $g): ?>
         <tr>
@@ -197,14 +198,14 @@ cms_header('Cestino', 'trash');
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="restore_gallery">
               <input type="hidden" name="id" value="<?= (int) $g['id'] ?>">
-              <button class="btn btn-sm" type="submit">Ripristina</button>
+              <button class="btn btn-sm" type="submit"><?= e(t('common.restore')) ?></button>
             </form>
             <form method="post" style="display:inline"
-                  onsubmit="return confirm('Eliminare definitivamente la galleria e i suoi file?')">
+                  onsubmit="return confirm('<?= e(t('trs.purge_gal_confirm')) ?>')">
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="purge_gallery">
               <input type="hidden" name="id" value="<?= (int) $g['id'] ?>">
-              <button class="btn btn-sm btn-danger" type="submit">Elimina per sempre</button>
+              <button class="btn btn-sm btn-danger" type="submit"><?= e(t('trs.purge_forever')) ?></button>
             </form>
           </td>
         </tr>
@@ -217,7 +218,7 @@ cms_header('Cestino', 'trash');
 
 <?php if ($media): ?>
 <div class="card">
-  <h2>File eliminati</h2>
+  <h2><?= e(t('trs.files')) ?></h2>
   <div class="media-grid trash-grid">
     <?php foreach ($media as $m): ?>
     <div class="media-card">
@@ -232,9 +233,9 @@ cms_header('Cestino', 'trash');
       <div class="media-body">
         <div class="media-name" title="<?= e($m['original_name']) ?>"><?= e($m['original_name']) ?></div>
         <div class="hint">
-          da <strong><?= e($m['gallery_name']) ?></strong><br>
-          eliminato il <?= date('d/m/Y H:i', strtotime($m['deleted_at'])) ?>
-          <?= $m['deleted_by_name'] ? 'da ' . e($m['deleted_by_name']) : '' ?>
+          <?= t('trs.from_gallery', ['name' => '<strong>' . e($m['gallery_name']) . '</strong>']) ?><br>
+          <?= e(t('trs.deleted_on', ['when' => date('d/m/Y H:i', strtotime($m['deleted_at']))])) ?>
+          <?= $m['deleted_by_name'] ? e(t('trs.deleted_by', ['who' => $m['deleted_by_name']])) : '' ?>
         </div>
         <div class="media-foot">
           <span class="hint"><?= human_bytes((int) $m['filesize']) ?></span>
@@ -243,14 +244,14 @@ cms_header('Cestino', 'trash');
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="restore_media">
               <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
-              <button class="btn btn-sm" type="submit">Ripristina</button>
+              <button class="btn btn-sm" type="submit"><?= e(t('common.restore')) ?></button>
             </form>
             <form method="post" style="display:inline"
-                  onsubmit="return confirm('Eliminare definitivamente questo file?')">
+                  onsubmit="return confirm('<?= e(t('trs.purge_file_confirm')) ?>')">
               <?= csrf_field() ?>
               <input type="hidden" name="do" value="purge_media">
               <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
-              <button class="btn btn-sm btn-danger" type="submit">Elimina</button>
+              <button class="btn btn-sm btn-danger" type="submit"><?= e(t('common.delete')) ?></button>
             </form>
           </span>
         </div>

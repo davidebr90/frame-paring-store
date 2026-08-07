@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Creazione utente: anagrafica, credenziali e ruolo.
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 require_cap('users.manage');
 
 $pdo = db();
@@ -21,18 +21,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm  = (string) ($_POST['confirm'] ?? '');
 
     if (preg_match('/^[a-zA-Z0-9._-]{3,50}$/', $form['username']) !== 1) {
-        $errors[] = 'Username: 3-50 caratteri tra lettere, numeri, punto, trattino e underscore';
+        $errors[] = t('unew.err_username');
     }
     if (strlen($password) < 10) {
-        $errors[] = 'La password deve avere almeno 10 caratteri';
+        $errors[] = t('unew.err_password');
     } elseif ($password !== $confirm) {
-        $errors[] = 'Le due password non coincidono';
+        $errors[] = t('unew.err_mismatch');
     }
     if (!isset(ROLE_LABELS[$form['role']])) {
-        $errors[] = 'Ruolo non valido';
+        $errors[] = t('unew.err_role');
     }
     if ($form['email'] !== '' && !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Indirizzo email non valido';
+        $errors[] = t('unew.err_email');
     }
 
     if (!$errors) {
@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $form['note'] !== '' ? $form['note'] : null,
                     $form['role'],
                 ]);
-            flash_set('ok', 'Utente creato: ora puoi rifinirne i permessi');
+            flash_set('ok', t('unew.created'));
             redirect('user_edit.php?id=' . (int) $pdo->lastInsertId());
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
@@ -56,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $check = $pdo->prepare('SELECT id FROM users WHERE username = ? AND deleted_at IS NOT NULL');
                 $check->execute([$form['username']]);
                 $errors[] = $check->fetchColumn() !== false
-                    ? 'Un utente con questo username è nel cestino: ripristinalo o eliminalo definitivamente da Contenuti → Cestino'
-                    : 'Esiste già un utente con questo username';
+                    ? t('unew.err_trashed')
+                    : t('unew.err_duplicate');
             } else {
                 throw $e;
             }
@@ -65,14 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-cms_header('Crea utente', 'users.new');
+cms_header(t('unew.title'), 'users.new');
 ?>
 <div class="main-head">
   <div>
-    <h1>Crea utente</h1>
-    <div class="sub">I permessi di dettaglio si rifiniscono dopo la creazione</div>
+    <h1><?= e(t('unew.title')) ?></h1>
+    <div class="sub"><?= e(t('unew.subtitle')) ?></div>
   </div>
-  <a class="btn" href="users.php">← Torna alla lista</a>
+  <a class="btn" href="users.php"><?= e(t('unew.back')) ?></a>
 </div>
 
 <?php if ($errors): ?>
@@ -85,54 +85,54 @@ cms_header('Crea utente', 'users.new');
   <?= csrf_field() ?>
 
   <div class="card">
-    <h2>Anagrafica</h2>
+    <h2><?= e(t('prof.identity')) ?></h2>
     <div class="field-grid">
       <div class="field">
-        <label for="full_name">Nome e cognome</label>
+        <label for="full_name"><?= e(t('prof.full_name')) ?></label>
         <input type="text" id="full_name" name="full_name" maxlength="120"
-               value="<?= e($form['full_name']) ?>" placeholder="Mario Rossi">
+               value="<?= e($form['full_name']) ?>" placeholder="<?= e(t('unew.name_ph')) ?>">
       </div>
       <div class="field">
-        <label for="email">Email</label>
+        <label for="email"><?= e(t('prof.email')) ?></label>
         <input type="email" id="email" name="email" maxlength="190"
-               value="<?= e($form['email']) ?>" placeholder="mario@azienda.it">
+               value="<?= e($form['email']) ?>" placeholder="<?= e(t('unew.email_ph')) ?>">
       </div>
       <div class="field">
-        <label for="phone">Telefono</label>
+        <label for="phone"><?= e(t('prof.phone')) ?></label>
         <input type="text" id="phone" name="phone" maxlength="40"
-               value="<?= e($form['phone']) ?>" placeholder="+39 …">
+               value="<?= e($form['phone']) ?>" placeholder="<?= e(t('unew.phone_ph')) ?>">
       </div>
       <div class="field">
         <label for="note">Note</label>
         <input type="text" id="note" name="note" maxlength="255"
-               value="<?= e($form['note']) ?>" placeholder="Reparto, sede, riferimenti…">
+               value="<?= e($form['note']) ?>" placeholder="<?= e(t('unew.note_ph')) ?>">
       </div>
     </div>
   </div>
 
   <div class="card">
-    <h2>Accesso</h2>
+    <h2><?= e(t('unew.access')) ?></h2>
     <div class="field-grid">
       <div class="field">
-        <label for="username">Username <span class="req">*</span></label>
+        <label for="username"><?= e(t('login.username')) ?> <span class="req">*</span></label>
         <input type="text" id="username" name="username" maxlength="50" required
-               value="<?= e($form['username']) ?>" placeholder="mario.rossi">
+               value="<?= e($form['username']) ?>" placeholder="<?= e(t('unew.username_ph')) ?>">
       </div>
       <div class="field">
-        <label for="role">Ruolo <span class="req">*</span></label>
+        <label for="role"><?= e(t('usr.role')) ?> <span class="req">*</span></label>
         <select id="role" name="role">
-          <?php foreach (ROLE_LABELS as $key => $label): ?>
+          <?php foreach (role_label_list() as $key => $label): ?>
           <option value="<?= e($key) ?>"<?= $form['role'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
       <div class="field">
-        <label for="password">Password <span class="req">*</span></label>
+        <label for="password"><?= e(t('login.password')) ?> <span class="req">*</span></label>
         <input type="password" id="password" name="password" minlength="10" required
-               placeholder="minimo 10 caratteri">
+               placeholder="<?= e(t('unew.password_ph')) ?>">
       </div>
       <div class="field">
-        <label for="confirm">Conferma password <span class="req">*</span></label>
+        <label for="confirm"><?= e(t('unew.confirm')) ?> <span class="req">*</span></label>
         <input type="password" id="confirm" name="confirm" minlength="10" required>
       </div>
     </div>
@@ -140,18 +140,18 @@ cms_header('Crea utente', 'users.new');
     <div class="role-legend">
       <?php foreach (ROLE_CAPABILITIES as $key => $caps): ?>
       <div class="role-legend-item role-<?= e($key) ?>">
-        <strong><?= e(ROLE_LABELS[$key]) ?></strong>
+        <strong><?= e(role_label($key)) ?></strong>
         <span><?= $caps === null
-            ? 'tutti i permessi'
-            : implode(', ', array_map(fn (string $c): string => mb_strtolower(CAPABILITIES[$c]), $caps)) ?></span>
+            ? t('unew.all_caps')
+            : implode(', ', array_map(fn (string $c): string => mb_strtolower(cap_label($c)), $caps)) ?></span>
       </div>
       <?php endforeach; ?>
     </div>
   </div>
 
   <div class="form-actions">
-    <button class="btn btn-primary" type="submit">Crea utente</button>
-    <a class="btn" href="users.php">Annulla</a>
+    <button class="btn btn-primary" type="submit"><?= e(t('unew.title')) ?></button>
+    <a class="btn" href="users.php"><?= e(t('common.cancel')) ?></a>
   </div>
 </form>
 <?php cms_footer();

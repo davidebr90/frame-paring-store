@@ -13,8 +13,8 @@ android {
         minSdk = 22
         targetSdk = 34
         // Allineata a APP_VERSION di server/core/version.php
-        versionCode = 100
-        versionName = "1.0.0"
+        versionCode = 160
+        versionName = "1.6.0"
 
         // URL del server proposto di default nella schermata di primo avvio
         // (modificabile lì; cambialo qui per pre-configurare le tue build)
@@ -48,5 +48,10 @@ dependencies {
     // Tre sole dipendenze, ognuna con un motivo preciso:
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") // rete/IO fuori dal main thread
     implementation("androidx.media3:media3-exoplayer:1.4.1")                 // riproduzione video
+    // Formati delle dirette da sorgente esterna: senza questi moduli un
+    // indirizzo .m3u8/.mpd/rtsp:// non sarebbe riproducibile
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-rtsp:1.4.1")
     implementation("com.google.zxing:core:3.5.3")                            // generazione QR on-device (pure Java)
 }

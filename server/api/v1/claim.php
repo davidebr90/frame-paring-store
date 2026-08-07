@@ -6,7 +6,7 @@ declare(strict_types=1);
 // l'app la riceve nelle impostazioni, estrae il token e lo presenta qui.
 // Il token è monouso: viene azzerato al primo claim andato a buon fine.
 // Accetta il token sia come query string (?token=...) sia nel body JSON.
-require __DIR__ . '/_api.php';
+require_once __DIR__ . '/_api.php';
 require_method('POST');
 
 $body = read_json_body();
@@ -19,6 +19,12 @@ $deviceInfo = isset($body['device_info'])
     ? mb_substr(trim((string) $body['device_info']), 0, 255)
     : null;
 
+// Qui il flusso è avviato dal dispositivo: il token nasce adesso, la
+// risposta porta il chiaro e il database riceve solo l'impronta.
+// Il claim_token invece resta leggibile nel database DI PROPOSITO: il CMS
+// deve poter rimostrare la URL di configurazione finché non viene usata
+// (è il senso del pre-provisioning). È monouso, vive solo su schermi
+// pending e viene azzerato al primo utilizzo.
 $authToken = random_hex();
 $stmt = db()->prepare("UPDATE screens
                        SET status = 'paired',
@@ -28,14 +34,14 @@ $stmt = db()->prepare("UPDATE screens
                            device_info = COALESCE(?, device_info)
                        WHERE claim_token = ?
                          AND status = 'pending'");
-$stmt->execute([$authToken, $deviceInfo !== '' ? $deviceInfo : null, $claimToken]);
+$stmt->execute([token_hash($authToken), $deviceInfo !== '' ? $deviceInfo : null, $claimToken]);
 
 if ($stmt->rowCount() !== 1) {
     json_error('URL di configurazione non valida o già utilizzata', 404);
 }
 
 $stmt = db()->prepare('SELECT name FROM screens WHERE auth_token = ?');
-$stmt->execute([$authToken]);
+$stmt->execute([token_hash($authToken)]);
 $name = (string) $stmt->fetchColumn();
 
 json_out([

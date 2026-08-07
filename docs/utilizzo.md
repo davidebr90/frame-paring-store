@@ -70,6 +70,19 @@ configurazione attiva del contenuto mostrato.
 L'anteprima è disponibile sia nella pagina di una galleria (solo quei
 contenuti) sia nella pagina di uno schermo (playlist completa).
 
+### La galleria di servizio
+
+Fra le gallerie ne trovi una marcata **sistema**, «Immagini di servizio»,
+creata dall'installazione. Contiene gli sfondi pronti per le sospensioni —
+nero e bianco a piena risoluzione — che servono come immagine di cortesia
+fuori fascia oraria, come riempimento, o per oscurare uno schermo durante
+una diretta.
+
+Non si può eliminare né rinominare, perché il sistema vi si appoggia; i
+singoli file sì, e in fondo alla sua pagina c'è *Ripristina i file standard*
+che rimette quelli eliminati senza toccare ciò che hai aggiunto tu. Puoi
+usarla come una galleria qualsiasi e caricarci altre immagini di attesa.
+
 ## Schermi
 
 ![Pagina di uno schermo](assets/img/cms-schermo.png)
@@ -97,23 +110,60 @@ Il PIN vale 5 minuti; se scade, l'app ne genera uno nuovo da sola.
 
 ### Accensione programmata
 
-Puoi definire una o più fasce orarie in cui lo schermo riproduce. Fuori fascia
-mostra a scelta:
-
-- **schermo nero**, che sembra spento (consumo minimo, nessuna immagine)
-- **immagine di cortesia**, caricabile direttamente da questa scheda
-
-Una fascia che scavalca la mezzanotte (per esempio 22:00 → 06:00) è valida.
-Senza fasce lo schermo riproduce sempre.
-
-> La programmazione è valutata dall'orologio del dispositivo, quindi funziona
-> anche se la TV perde la connessione.
+La programmazione ha una sezione tutta sua: **Programmazione**. Vedi
+[il capitolo dedicato](#programmazione).
 
 ### Revoca ed eliminazione
 
 **Revoca accesso** blocca l'autorizzazione della TV mantenendone la storia:
 il dispositivo smette di ricevere contenuti e va riassociato.
 **Elimina schermo** lo rimuove del tutto.
+
+## Programmazione
+
+Ogni schermo ha la propria programmazione: quando riprodurre e cosa mostrare
+nelle ore in cui resta spento. La TV la valuta con il **proprio orologio**,
+quindi continua a rispettarla anche senza rete.
+
+### Panoramica
+
+*Programmazione → Tutti gli schermi* mette in fila i televisori con, per
+ciascuno: se è acceso **in questo momento**, il riassunto delle fasce, una
+striscia con la settimana a colpo d'occhio, le ore complessive di accensione
+e cosa mostra fuori fascia.
+
+### Configurare uno schermo
+
+Dal pulsante *Configura* si apre l'editor.
+
+**Modelli rapidi** — un punto di partenza per i casi più comuni: negozio,
+negozio con pausa pranzo, ufficio, solo weekend, vetrina. Applicandone uno le
+fasce vengono sostituite e restano modificabili; nulla è salvato finché non
+premi *Salva*.
+
+**Fasce di accensione** — ogni fascia ha un orario di inizio, uno di fine e
+**i giorni in cui vale**, scelti con le pastiglie Lun…Dom. Senza fasce lo
+schermo riproduce sempre.
+
+Una fascia che scavalca la mezzanotte — per esempio `22:00 → 06:00` — è
+legittima e viene segnalata: **comincia nel giorno scelto e finisce il
+mattino dopo**. Selezionando il sabato, l'accensione copre il sabato sera e
+le prime ore di domenica, non la notte fra venerdì e sabato.
+
+**Anteprima della settimana** — una griglia di sette giorni per ventiquattro
+ore in cui le ore colorate sono quelle di riproduzione. Si aggiorna mentre
+modifichi, quindi vedi subito il risultato senza dover salvare per scoprirlo.
+Sotto trovi le ore complessive: utile per capire quanto resterà acceso il
+pannello.
+
+**Fuori fascia** — schermo nero (spento apparente) oppure un'immagine di
+cortesia, caricabile direttamente da qui.
+
+### Copiare su altri schermi
+
+In fondo alla pagina puoi applicare la stessa programmazione — fasce e
+comportamento fuori fascia — ad altri schermi selezionandoli dall'elenco:
+con più vetrine con gli stessi orari si configura una volta sola.
 
 ## Utenti e permessi
 
@@ -167,6 +217,81 @@ In *Sistema → Personalizzazione* puoi cambiare nome, logo, colore principale e
 testi mostrati sia nel CMS sia sulla schermata di configurazione delle TV.
 Le modifiche arrivano ai dispositivi al collegamento successivo, senza
 ricompilare l'app.
+
+## Sovraimpressione
+
+In *Sistema → Sovraimpressione* si configura un banner discreto sopra il
+contenuto, con il logo e/o la data e l'ora. È **disattivato di default** e non
+tocca in alcun modo la riproduzione: gallerie, transizioni e fasce orarie
+restano quelle che sono, e il banner resta visibile anche durante una diretta.
+
+Si sceglie:
+
+- **cosa mostrare**: logo, data, ora, in qualsiasi combinazione
+- **il formato della data**: contratta (`24/06/2026`) o estesa (`24 Giugno 2026`)
+- **la posizione** fra nove ancoraggi, dai tre angoli superiori ai tre inferiori
+  passando per la fascia centrale
+- **la dimensione** (per un pannello da 55" in su conviene *Grande*) e
+  l'**opacità del fondo**
+
+L'anteprima a fianco della griglia mostra il risultato mentre lo si imposta.
+
+Il logo del banner è indipendente da quello del pannello: qui serve
+un'immagine leggibile su fondo scuro, preferibilmente un PNG con sfondo
+trasparente. Non sono ammessi gli SVG, che la TV non sa disegnare.
+
+La data e l'ora sono composte dalla TV con il proprio orologio: restano
+corrette anche a rete assente e passano da sole al giorno successivo senza
+attendere un collegamento.
+
+### Impostazioni diverse per ogni schermo
+
+Quelle descritte sopra sono le impostazioni **generali**: le segue ogni
+schermo che non ne ha di proprie. In fondo alla pagina c'è l'elenco degli
+schermi con, per ciascuno, l'origine delle impostazioni (*Generali* o
+*Proprie*) e se il banner è acceso.
+
+Da *Configura* si apre lo schermo: finché eredita, si vede solo il riepilogo
+di ciò che sta applicando. Il pulsante **Dai a questo schermo impostazioni
+proprie** lo scollega partendo dagli stessi valori — non cambia aspetto — e da
+lì si può modificare tutto senza toccare gli altri: posizione, contenuto,
+formato, dimensione, opacità e persino un **logo diverso**, utile quando gli
+schermi stanno in punti vendita o sedi differenti.
+
+Si torna all'eredità quando si vuole, e un solo pulsante riporta tutti gli
+schermi alle impostazioni generali.
+
+> Le modifiche arrivano agli schermi entro pochi secondi, non serve
+> riavviarli né attendere il ciclo di aggiornamento completo.
+
+## Dirette
+
+In *Dirette → Sorgenti live* si manda un contenuto **in sovrapposizione** su
+uno o più schermi contemporaneamente: un livello temporaneo che copre la
+riproduzione normale senza cancellare nulla. Alla fine ogni schermo riprende
+la propria programmazione da solo.
+
+La sorgente può essere un file già caricato nelle gallerie oppure un flusso
+esterno (HLS, DASH, RTSP). Per la diretta si impostano adattamento, rotazione,
+audio e ripetizione in loop, indipendenti da quelli del file originale. Con
+una durata impostata la diretta si chiude da sola; altrimenti resta in onda
+finché non la si interrompe.
+
+Gli schermi partono allineati sullo stesso istante del contenuto, anche se
+accesi in momenti diversi: chi entra dopo si posiziona nel punto in cui si
+trova la diretta.
+
+Accanto alla voce *Dirette* del menu c'è una spia di stato:
+
+| Spia | Significato |
+| --- | --- |
+| grigia | nessuna diretta in corso |
+| verde | diretta in onda su tutti gli schermi indicati |
+| ambra | diretta conclusa da meno di un quarto d'ora |
+| rossa | diretta avviata ma uno o più schermi non la stanno ricevendo |
+
+La spia si aggiorna da sola: una diretta avviata da un altro operatore si vede
+comparire senza ricaricare la pagina.
 
 ## Manutenzione
 

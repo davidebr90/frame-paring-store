@@ -1,4 +1,8 @@
-# Frame Paring Store
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Frame Paring Store" width="180">
+</p>
+
+<h1 align="center">Frame Paring Store</h1>
 
 Sistema di **digital signage self-hosted**: un CMS in PHP che gira su un normale
 hosting condiviso e un'app per Android TV / Fire Stick che riproduce in loop
@@ -38,6 +42,14 @@ non dipende da servizi esterni e non ha canoni.
 **Personalizzazione**
 - Nome, logo, colore e testi del CMS e della schermata TV modificabili
   dall'amministratore, senza ricompilare l'app
+- Banner in sovraimpressione con logo e data/ora in nove posizioni,
+  configurabile per tutti gli schermi o per il singolo
+
+**Multilingua**
+- Interfaccia in italiano e inglese, pannello e televisori
+- Ogni utente sceglie la propria lingua; una predefinita di sistema vale per
+  chi non l'ha scelta e per gli schermi
+- Aggiungerne una richiede un file di traduzione e una riga di elenco
 
 **App TV**
 - Cache locale dei media: riproduce anche senza rete, scarica solo ciò che cambia
@@ -75,12 +87,11 @@ Nessuna dipendenza da Composer, npm o servizi cloud.
 
 ## Installazione rapida
 
-1. Crea un database MySQL e importa [`database/schema.sql`](database/schema.sql)
-   (via phpMyAdmin o strumento equivalente del tuo hosting).
+1. Crea un database MySQL vuoto dal pannello dell'hosting e annota le credenziali.
 2. Carica il contenuto di `server/` nella cartella pubblica dell'hosting.
-3. Copia `server/core/config.sample.php` in `server/core/config.php` e compila
-   credenziali del database e `base_url`.
-4. Apri il CMS nel browser: al primo accesso crei l'amministratore.
+3. Apri `install.php` nel browser: l'installazione guidata controlla i requisiti,
+   crea le tabelle, scrive la configurazione e ti fa creare l'amministratore.
+4. Elimina `install.php` dal server.
 
 Guida completa: [docs/installazione.md](docs/installazione.md).
 

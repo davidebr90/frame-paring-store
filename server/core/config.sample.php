@@ -20,6 +20,10 @@ return [
     // Ogni quanti secondi l'app interroga il server (pairing e playlist)
     'poll_interval' => 60,
 
+    // Controllo di stato: risposta di poche centinaia di byte, permette
+    // alle TV di reagire in fretta all'avvio di una diretta
+    'state_interval' => 10,
+
     // Dimensione massima upload media, in byte (deve stare entro i
     // limiti upload_max_filesize/post_max_size dell'hosting)
     'max_upload_bytes' => 209715200, // 200 MB

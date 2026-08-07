@@ -34,6 +34,7 @@ CREATE TABLE `users` (
   `note`          VARCHAR(255)     NULL,
   `role`          ENUM('admin','editor','operator') NOT NULL DEFAULT 'operator',
   `capabilities_json` TEXT         NULL,               -- override puntuali; NULL = default del ruolo
+  `language`         CHAR(5)       NULL,               -- lingua dell'interfaccia; NULL = predefinita del sistema
   `is_active`     TINYINT(1)       NOT NULL DEFAULT 1, -- disattivazione senza cancellare la storia
   `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_login_at` DATETIME         NULL,
@@ -42,6 +43,18 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_users_username` (`username`),
   KEY `idx_users_deleted` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Tentativi di accesso falliti, per il blocco anti forza bruta.
+-- La chiave lega username e indirizzo: bloccare il solo username
+-- permetterebbe a chiunque di chiudere fuori l'amministratore vero.
+-- ------------------------------------------------------------
+CREATE TABLE `login_attempts` (
+  `attempt_key` CHAR(40)     NOT NULL,  -- sha1(username|ip)
+  `attempts`    INT UNSIGNED NOT NULL DEFAULT 0,
+  `last_at`     DATETIME     NOT NULL,
+  PRIMARY KEY (`attempt_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -74,6 +87,7 @@ CREATE TABLE `screens` (
   `schedule_json`    TEXT          NULL,               -- fasce orarie attive [{"from":"09:00","to":"20:00"},...]; NULL = sempre attivo
   `idle_mode`        ENUM('black','image') NOT NULL DEFAULT 'black', -- fuori fascia: nero (spento apparente) o immagine di cortesia
   `idle_media_id`    INT UNSIGNED  NULL,               -- immagine di cortesia (un media immagine)
+  `overlay_json`     TEXT          NULL,               -- banner personalizzato di questo schermo; NULL = eredita le impostazioni generali
   `last_seen_at`     DATETIME      NULL,               -- ultimo polling ricevuto
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -156,6 +170,49 @@ CREATE TABLE `screen_galleries` (
   CONSTRAINT `fk_sg_gallery`
     FOREIGN KEY (`gallery_id`) REFERENCES `galleries` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Dirette in sovrapposizione
+-- Livello temporaneo che si sovrappone alla riproduzione normale:
+-- non modifica gallerie, fasce orarie né impostazioni degli schermi.
+-- Al termine (durata scaduta o interruzione manuale) ogni schermo
+-- riprende da solo la propria programmazione.
+-- ------------------------------------------------------------
+CREATE TABLE `live_overrides` (
+  `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name`         VARCHAR(100) NOT NULL,
+  `source_type`  ENUM('media','external','gallery') NOT NULL, -- singolo file, flusso esterno o intera galleria
+  `media_id`     INT UNSIGNED NULL,                 -- se source_type = 'media'
+  `gallery_id`   INT UNSIGNED NULL,                 -- se source_type = 'gallery'
+  `source_url`   VARCHAR(500) NULL,                 -- se source_type = 'external' (HLS/DASH/RTSP)
+  `fit`          ENUM('contain','cover') NOT NULL DEFAULT 'contain',
+  `rotation`     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  `muted`        TINYINT(1)   NOT NULL DEFAULT 0,
+  `loop_content` TINYINT(1)   NOT NULL DEFAULT 1,   -- ripete il file fino al termine
+  `started_at`   DATETIME     NOT NULL,             -- riferimento per la sincronizzazione fra schermi
+  `ends_at`      DATETIME     NULL,                 -- NULL = fino a interruzione manuale
+  `stopped_at`   DATETIME     NULL,                 -- valorizzato all'interruzione
+  `created_by`   INT UNSIGNED NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_live_active` (`stopped_at`, `ends_at`),
+  CONSTRAINT `fk_live_media` FOREIGN KEY (`media_id`) REFERENCES `media` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_live_gallery` FOREIGN KEY (`gallery_id`) REFERENCES `galleries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Schermi coinvolti nella diretta (uno, alcuni o tutti)
+-- Uno schermo per riga, con la possibilità di scostarsi dalle impostazioni
+-- della diretta: lo stesso contenuto su un pannello orizzontale e su uno
+-- verticale vuole spesso rotazione o adattamento diversi.
+CREATE TABLE `live_override_screens` (
+  `override_id` INT UNSIGNED NOT NULL,
+  `screen_id`   INT UNSIGNED NOT NULL,
+  `fit`         ENUM('contain','cover') NULL,  -- NULL = quello della diretta
+  `rotation`    SMALLINT UNSIGNED       NULL,  -- NULL = quella della diretta
+  PRIMARY KEY (`override_id`, `screen_id`),
+  KEY `idx_los_screen` (`screen_id`),
+  CONSTRAINT `fk_los_override` FOREIGN KEY (`override_id`) REFERENCES `live_overrides` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_los_screen` FOREIGN KEY (`screen_id`) REFERENCES `screens` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- FK differita: screens.idle_media_id -> media.id (vedi nota sopra)

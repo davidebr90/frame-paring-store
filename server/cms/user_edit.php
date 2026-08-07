@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Gestione di un singolo utente: anagrafica, ruolo, permessi, stato,
 // reset password ed eliminazione.
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 require_cap('users.manage');
 
 $pdo = db();
@@ -14,7 +14,7 @@ $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL')
 $stmt->execute([$id]);
 $user = $stmt->fetch();
 if ($user === false) {
-    flash_set('err', 'Utente non trovato');
+    flash_set('err', t('ued.not_found'));
     redirect('users.php');
 }
 $isMe = (int) $user['id'] === (int) $me['id'];
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $note     = trim((string) ($_POST['note'] ?? ''));
 
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            flash_set('err', 'Indirizzo email non valido');
+            flash_set('err', t('prof.err_email'));
         } else {
             $pdo->prepare('UPDATE users SET full_name = ?, email = ?, phone = ?, note = ? WHERE id = ?')
                 ->execute([
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $note !== '' ? $note : null,
                     $id,
                 ]);
-            flash_set('ok', 'Anagrafica aggiornata');
+            flash_set('ok', t('ued.identity_saved'));
         }
     } elseif ($do === 'permissions') {
         $role = (string) ($_POST['role'] ?? $user['role']);
@@ -58,11 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Nessuno può togliersi l'accesso da solo, e almeno un
         // amministratore attivo deve sempre restare
         if ($isMe && ($role !== 'admin' || $isActive === 0)) {
-            flash_set('err', 'Non puoi rimuovere il tuo ruolo di amministratore né disattivarti');
+            flash_set('err', t('ued.err_self_admin'));
             redirect('user_edit.php?id=' . $id);
         }
         if ($user['role'] === 'admin' && ($role !== 'admin' || $isActive === 0) && active_admins($pdo) <= 1) {
-            flash_set('err', 'Deve restare almeno un amministratore attivo');
+            flash_set('err', t('ued.err_last_admin'));
             redirect('user_edit.php?id=' . $id);
         }
 
@@ -80,27 +80,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pdo->prepare('UPDATE users SET role = ?, capabilities_json = ?, is_active = ? WHERE id = ?')
             ->execute([$role, $caps, $isActive, $id]);
-        flash_set('ok', 'Ruolo e permessi aggiornati');
+        flash_set('ok', t('ued.perms_saved'));
     } elseif ($do === 'password') {
         $password = (string) ($_POST['password'] ?? '');
         $confirm  = (string) ($_POST['confirm'] ?? '');
         if (strlen($password) < 10) {
-            flash_set('err', 'La password deve avere almeno 10 caratteri');
+            flash_set('err', t('unew.err_password'));
         } elseif ($password !== $confirm) {
-            flash_set('err', 'Le due password non coincidono');
+            flash_set('err', t('unew.err_mismatch'));
         } else {
             $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
                 ->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
-            flash_set('ok', 'Password reimpostata');
+            flash_set('ok', t('ued.password_reset'));
         }
     } elseif ($do === 'delete') {
         if ($isMe) {
-            flash_set('err', 'Non puoi eliminare te stesso');
+            flash_set('err', t('ued.err_self_delete'));
         } elseif ($user['role'] === 'admin' && active_admins($pdo) <= 1) {
-            flash_set('err', 'Deve restare almeno un amministratore attivo');
+            flash_set('err', t('ued.err_last_admin'));
         } else {
             trash_user($id, (int) $me['id']);
-            flash_set('ok', 'Utente spostato nel cestino: puoi ripristinarlo da Contenuti → Cestino');
+            flash_set('ok', t('ued.trashed'));
             redirect('users.php');
         }
     }
@@ -115,79 +115,80 @@ cms_header($user['full_name'] ?: $user['username'], 'users');
 <div class="main-head">
   <div>
     <h1><?= e($user['full_name'] ?: $user['username']) ?></h1>
-    <div class="sub">
-      @<?= e($user['username']) ?> ·
-      <?= e(ROLE_LABELS[$user['role']] ?? $user['role']) ?> ·
-      creato il <?= date('d/m/Y', strtotime($user['created_at'])) ?> ·
-      ultimo accesso <?= $user['last_login_at'] ? date('d/m/Y H:i', strtotime($user['last_login_at'])) : 'mai' ?>
-    </div>
+    <div class="sub"><?= e(t('ued.header', [
+      'username' => $user['username'],
+      'role'     => role_label($user['role']),
+      'created'  => date('d/m/Y', strtotime($user['created_at'])),
+      'login'    => $user['last_login_at'] ? date('d/m/Y H:i', strtotime($user['last_login_at'])) : t('common.never'),
+    ])) ?></div>
   </div>
-  <a class="btn" href="users.php">← Torna alla lista</a>
+  <a class="btn" href="users.php"><?= e(t('unew.back')) ?></a>
 </div>
 
 <div class="card">
-  <h2>Anagrafica</h2>
+  <h2><?= e(t('prof.identity')) ?></h2>
   <form method="post">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="profile">
     <div class="field-grid">
       <div class="field">
-        <label for="full_name">Nome e cognome</label>
+        <label for="full_name"><?= e(t('prof.full_name')) ?></label>
         <input type="text" id="full_name" name="full_name" maxlength="120" value="<?= e($user['full_name']) ?>">
       </div>
       <div class="field">
-        <label for="email">Email</label>
+        <label for="email"><?= e(t('prof.email')) ?></label>
         <input type="email" id="email" name="email" maxlength="190" value="<?= e($user['email']) ?>">
       </div>
       <div class="field">
-        <label for="phone">Telefono</label>
+        <label for="phone"><?= e(t('prof.phone')) ?></label>
         <input type="text" id="phone" name="phone" maxlength="40" value="<?= e($user['phone']) ?>">
       </div>
       <div class="field">
-        <label for="note">Note</label>
+        <label for="note"><?= e(t('prof.note')) ?></label>
         <input type="text" id="note" name="note" maxlength="255" value="<?= e($user['note']) ?>">
       </div>
     </div>
-    <div class="form-actions"><button class="btn btn-primary" type="submit">Salva anagrafica</button></div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit"><?= e(t('ued.save_identity')) ?></button></div>
   </form>
 </div>
 
 <div class="card">
-  <h2>Ruolo e permessi</h2>
+  <h2><?= e(t('ued.perms')) ?></h2>
   <form method="post">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="permissions">
     <div class="field-grid">
       <div class="field">
-        <label for="role">Ruolo</label>
+        <label for="role"><?= e(t('usr.role')) ?></label>
         <select id="role" name="role" data-role-select>
-          <?php foreach (ROLE_LABELS as $key => $label): ?>
+          <?php foreach (role_label_list() as $key => $label): ?>
           <option value="<?= e($key) ?>"<?= $user['role'] === $key ? ' selected' : '' ?>><?= e($label) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
       <div class="field">
-        <label>Stato account</label>
-        <label class="switch">
-          <input type="checkbox" name="is_active" value="1"<?= $user['is_active'] ? ' checked' : '' ?> data-switch>
+        <label for="is_active"><?= e(t('ued.account_status')) ?></label>
+        <label class="switch" for="is_active">
+          <input type="checkbox" id="is_active" name="is_active" value="1"<?= $user['is_active'] ? ' checked' : '' ?> data-switch>
           <span class="switch-track"></span>
           <span class="switch-label">
-            <span>Accesso al CMS</span>
+            <span><?= e(t('ued.cms_access')) ?></span>
             <span class="switch-state" data-switch-state
-                  data-on="Attivo: può accedere" data-off="Disattivato: non può accedere"><?=
-              $user['is_active'] ? 'Attivo: può accedere' : 'Disattivato: non può accedere' ?></span>
+                  data-on="<?= e(t('ued.can_access')) ?>" data-off="<?= e(t('ued.cannot_access')) ?>"><?=
+              e($user['is_active'] ? t('ued.can_access') : t('ued.cannot_access')) ?></span>
           </span>
         </label>
       </div>
     </div>
 
     <div class="caps-block" data-caps<?= $user['role'] === 'admin' ? ' hidden' : '' ?>>
-      <p class="hint">
-        Permessi <?= $isCustom ? '<strong>personalizzati</strong>' : 'ereditati dal ruolo' ?>.
-        Modificandoli si scostano dal set predefinito; riportandoli identici al ruolo tornano a essere ereditati.
-      </p>
+      <p class="hint"><?= t('ued.caps_custom', [
+        'state' => $isCustom
+            ? '<strong>' . e(t('ued.caps_custom_word')) . '</strong>'
+            : e(t('ued.caps_inherited')),
+      ]) ?></p>
       <div class="caps-grid">
-        <?php foreach (CAPABILITIES as $key => $label): ?>
+        <?php foreach (capability_labels() as $key => $label): ?>
         <label class="check-inline">
           <input type="checkbox" name="caps[]" value="<?= e($key) ?>"<?= in_array($key, $caps, true) ? ' checked' : '' ?>>
           <?= e($label) ?>
@@ -196,42 +197,41 @@ cms_header($user['full_name'] ?: $user['username'], 'users');
       </div>
     </div>
     <p class="hint" data-admin-note<?= $user['role'] === 'admin' ? '' : ' hidden' ?>>
-      L'amministratore ha sempre tutti i permessi: non sono personalizzabili.
+      <?= e(t('ued.admin_note')) ?>
     </p>
 
-    <div class="form-actions"><button class="btn btn-primary" type="submit">Salva permessi</button></div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit"><?= e(t('ued.save_perms')) ?></button></div>
   </form>
 </div>
 
 <div class="card">
-  <h2>Password</h2>
-  <p class="hint">Reimposta la password di accesso di questo utente.</p>
+  <h2><?= e(t('prof.password')) ?></h2>
+  <p class="hint"><?= e(t('ued.password_hint')) ?></p>
   <form method="post" autocomplete="off">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="password">
     <div class="field-grid">
       <div class="field">
-        <label for="password">Nuova password</label>
-        <input type="password" id="password" name="password" minlength="10" required placeholder="minimo 10 caratteri">
+        <label for="password"><?= e(t('prof.new_password')) ?></label>
+        <input type="password" id="password" name="password" minlength="10" required placeholder="<?= e(t('unew.password_ph')) ?>">
       </div>
       <div class="field">
-        <label for="confirm">Conferma</label>
+        <label for="confirm"><?= e(t('prof.confirm')) ?></label>
         <input type="password" id="confirm" name="confirm" minlength="10" required>
       </div>
     </div>
-    <div class="form-actions"><button class="btn" type="submit">Reimposta password</button></div>
+    <div class="form-actions"><button class="btn" type="submit"><?= e(t('ued.reset_password')) ?></button></div>
   </form>
 </div>
 
 <?php if (!$isMe): ?>
 <div class="card">
-  <h2>Zona pericolosa</h2>
-  <p class="hint">L'eliminazione è definitiva. Per sospendere temporaneamente l'accesso
-  è preferibile disattivare l'account.</p>
-  <form method="post" onsubmit="return confirm('Eliminare definitivamente questo utente?')">
+  <h2><?= e(t('ued.danger')) ?></h2>
+  <p class="hint"><?= e(t('ued.danger_hint')) ?></p>
+  <form method="post" onsubmit="return confirm('<?= e(t('ued.delete_confirm')) ?>')">
     <?= csrf_field() ?>
     <input type="hidden" name="do" value="delete">
-    <button class="btn btn-danger" type="submit">Elimina utente</button>
+    <button class="btn btn-danger" type="submit"><?= e(t('ued.delete_btn')) ?></button>
   </form>
 </div>
 <?php endif; ?>

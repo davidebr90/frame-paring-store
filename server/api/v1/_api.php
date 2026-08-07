@@ -17,9 +17,11 @@ declare(strict_types=1);
 
 // Prologo comune degli endpoint API: bootstrap + errori sempre in JSON,
 // senza mai esporre dettagli interni al client.
-require dirname(__DIR__, 2) . '/core/bootstrap.php';
-require dirname(__DIR__, 2) . '/core/trash.php';    // setting_get()
-require dirname(__DIR__, 2) . '/core/branding.php'; // nome e testi mostrati sulla TV
+require_once dirname(__DIR__, 2) . '/core/bootstrap.php';
+require_once dirname(__DIR__, 2) . '/core/trash.php';    // setting_get()
+require_once dirname(__DIR__, 2) . '/core/branding.php'; // nome e testi mostrati sulla TV
+require_once dirname(__DIR__, 2) . '/core/live.php';     // dirette in sovrapposizione
+require_once dirname(__DIR__, 2) . '/core/overlay.php';  // banner in sovraimpressione
 
 // Sistema disinstallato: nessun dispositivo deve più ricevere contenuti
 if (is_file(APP_ROOT . '/core/uninstalled.lock')) {

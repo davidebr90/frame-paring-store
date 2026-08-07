@@ -6,7 +6,7 @@ declare(strict_types=1);
 // Il file viene servito solo se appartiene a una galleria assegnata
 // allo schermo che lo richiede. Niente supporto Range: l'app scarica
 // i file in cache locale e li riproduce da lì, non in streaming.
-require __DIR__ . '/_api.php';
+require_once __DIR__ . '/_api.php';
 
 $screen = require_device();
 
@@ -15,8 +15,9 @@ if ($id < 1) {
     json_error('Parametro id mancante', 422);
 }
 
-// Autorizzato se il media è in una galleria assegnata allo schermo
-// oppure è la sua immagine di cortesia (che può stare in qualsiasi galleria)
+// Autorizzato se il media è in una galleria assegnata allo schermo, se è la
+// sua immagine di cortesia, oppure se è il contenuto di una diretta attiva
+// su quello schermo (che può provenire da qualsiasi galleria)
 $stmt = db()->prepare('SELECT m.filename, m.mime_type, m.filesize
                        FROM media m
                        WHERE m.id = :id AND m.deleted_at IS NULL AND (
@@ -24,9 +25,17 @@ $stmt = db()->prepare('SELECT m.filename, m.mime_type, m.filesize
                                    WHERE sg.gallery_id = m.gallery_id AND sg.screen_id = :sid)
                            OR EXISTS (SELECT 1 FROM screens s
                                       WHERE s.id = :sid2 AND s.idle_media_id = m.id)
+                           OR EXISTS (SELECT 1 FROM live_overrides o
+                                      JOIN live_override_screens los ON los.override_id = o.id
+                                      WHERE los.screen_id = :sid3
+                                        AND (o.media_id = m.id OR o.gallery_id = m.gallery_id)
+                                        AND o.stopped_at IS NULL
+                                        AND (o.ends_at IS NULL OR o.ends_at > NOW()))
                        )
                        LIMIT 1');
-$stmt->execute(['id' => $id, 'sid' => $screen['id'], 'sid2' => $screen['id']]);
+$stmt->execute([
+    'id' => $id, 'sid' => $screen['id'], 'sid2' => $screen['id'], 'sid3' => $screen['id'],
+]);
 $media = $stmt->fetch();
 
 if ($media === false) {

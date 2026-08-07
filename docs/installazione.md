@@ -26,11 +26,8 @@ completi su quel database. Annota:
 - password
 - host (di solito `localhost`, ma alcuni hosting usano un indirizzo dedicato)
 
-Apri **phpMyAdmin** (o lo strumento equivalente), seleziona il database appena
-creato, vai su **Importa** e carica il file [`database/schema.sql`](../database/schema.sql).
-
-Al termine devi vedere sei tabelle: `users`, `screens`, `galleries`, `media`,
-`screen_galleries`, `settings`.
+**Non serve importare nulla a mano**: le tabelle le crea l'installazione
+guidata al passo successivo.
 
 ## 3. Caricamento dei file
 
@@ -49,15 +46,49 @@ Struttura attesa sul server:
 ```
 public_html/
 ├── .htaccess
+├── install.php      ← procedura guidata, da eliminare al termine
 ├── api/v1/
 ├── cms/
 ├── core/
 └── uploads/
 ```
 
-## 4. Configurazione
+## 4. Installazione guidata
 
-Copia `core/config.sample.php` in `core/config.php` e compila i valori:
+Apri nel browser `https://tuodominio.it/install.php` (o
+`https://tuodominio.it/signage/install.php` se hai usato una sottocartella).
+
+La procedura è in italiano e in inglese — la lingua si sceglie in alto a
+destra — e si compone di quattro passi:
+
+1. **Requisiti** — un controllo dell'ambiente: versione di PHP, estensioni
+   `pdo_mysql` e `fileinfo`, permessi delle cartelle. Per ogni requisito non
+   soddisfatto trovi scritto come sistemarlo dal pannello dell'hosting.
+2. **Database** — inserisci i dati annotati al passo 2. La connessione viene
+   provata subito e, se funziona, le tabelle vengono create automaticamente.
+   Se il database contiene già dati di questo sistema, la procedura si ferma
+   e chiede conferma prima di proseguire: non sovrascrive nulla per sbaglio.
+3. **Impostazioni** — l'indirizzo pubblico viene dedotto dalla pagina che stai
+   guardando ed è quasi sempre già corretto. Gli altri valori (validità del
+   PIN, intervalli di aggiornamento, dimensione massima dei file) hanno valori
+   sensati e si possono lasciare così.
+4. **Fine** — la configurazione è salvata in `core/config.php`. Si passa alla
+   creazione dell'amministratore.
+
+> Se la cartella `core/` non è scrivibile, la procedura non si blocca: ti
+> mostra il contenuto di `config.php` da copiare e caricare via FTP. È
+> l'unico passaggio manuale, e solo su hosting particolarmente chiusi.
+
+Al termine **elimina `install.php` dal server via FTP**. Una volta creato
+l'amministratore la procedura si chiude da sola — riaprendola risponde
+«Installazione già completata» — ma è buona norma non lasciarla in giro.
+
+### Configurazione a mano (alternativa)
+
+Se preferisci non usare la procedura guidata, copia `core/config.sample.php`
+in `core/config.php`, compila i valori e importa
+[`database/schema.sql`](../database/schema.sql) da phpMyAdmin. Il file di
+configurazione ha questa forma:
 
 ```php
 return [
@@ -74,6 +105,7 @@ return [
 
     'pairing_ttl' => 300,        // validità del PIN, in secondi
     'poll_interval' => 60,       // ogni quanto le TV controllano gli aggiornamenti
+    'state_interval' => 10,      // controllo di stato, molto più frequente
     'max_upload_bytes' => 209715200,  // 200 MB per file
 ];
 ```
@@ -90,11 +122,17 @@ su alcuni hosting) dal client FTP: tasto destro sulla cartella → *Permessi*.
 
 ## 5. Primo accesso
 
-Apri `https://tuodominio.it/cms/` nel browser. Al primo avvio compare la
-configurazione iniziale: scegli username e password dell'amministratore
-(almeno 10 caratteri).
+Al termine dell'installazione guidata scegli username e password
+dell'amministratore (almeno 10 caratteri). Dopo la creazione entri
+direttamente nella dashboard.
 
-Dopo la creazione entri direttamente nella dashboard.
+Se hai configurato a mano, apri `https://tuodominio.it/cms/`: la creazione
+dell'amministratore compare da sola al primo avvio.
+
+La lingua del pannello si cambia in qualsiasi momento dal selettore in fondo
+al menu, e ogni utente può averne una propria dal proprio profilo. In
+*Sistema → Personalizzazione* si imposta quella predefinita, che vale anche
+per i televisori.
 
 ## 6. HTTPS (fortemente consigliato)
 
@@ -119,8 +157,8 @@ di alzarli, altri no. In quel caso comprimi i video prima di caricarli
 
 ## Risoluzione dei problemi
 
-**"Configurazione mancante"** — non hai creato `core/config.php`, oppure il
-nome del file è sbagliato.
+**"Configurazione mancante"** — non hai completato l'installazione guidata,
+oppure `core/config.php` non è stato caricato via FTP dopo averlo copiato.
 
 **Pagina bianca o errore 500** — controlla il log degli errori dell'hosting
 (di solito nel pannello, sezione "Log"). Le cause più frequenti sono credenziali

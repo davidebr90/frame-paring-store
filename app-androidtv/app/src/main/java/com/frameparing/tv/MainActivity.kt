@@ -15,6 +15,7 @@
 package com.frameparing.tv
 
 import android.app.Activity
+import android.content.Context
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
@@ -33,6 +34,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Orchestrazione: setup server -> pairing (PIN/QR o claim manuale) ->
 // sync periodico + player in loop. Activity pura, nessuna AppCompat.
@@ -51,6 +53,24 @@ class MainActivity : Activity() {
     private var currentPlaylist: Playlist? = null
     private var isIdle = false
     private var idleKey: String? = null
+    private var wasActive: Boolean? = null // per registrare i passaggi di fascia
+
+    // Diretta in sovrapposizione attualmente in onda (id), se c'è
+    private var stateJob: Job? = null
+    private var activeOverrideId: Int? = null
+    private var activeOverrideSig: String? = null // impronta della galleria in onda
+    // Timeline della diretta su galleria: durate degli slot e ancora
+    // temporale (elapsedRealtime a cui il ciclo valeva zero)
+    private var gallerySlots: List<Long> = emptyList()
+    private var galleryAnchor = 0L
+    private lateinit var bannerController: BannerController
+    private var bannerKey: String? = null // configurazione già applicata
+
+    // Richiesta di sincronizzazione anticipata. CONFLATED: più segnali
+    // ravvicinati valgono per uno solo, non si accodano.
+    private val syncWake = kotlinx.coroutines.channels.Channel<Unit>(
+        kotlinx.coroutines.channels.Channel.CONFLATED
+    )
 
     private lateinit var pairingPanel: ScrollView
     private lateinit var serverForm: View
@@ -66,6 +86,13 @@ class MainActivity : Activity() {
     private lateinit var pairProgress: android.widget.ProgressBar
     private lateinit var pairCountdown: TextView
 
+    // La lingua va applicata PRIMA che il layout venga gonfiato: dopo,
+    // le stringhe già risolte resterebbero nella lingua precedente.
+    override fun attachBaseContext(newBase: Context) {
+        val saved = Prefs(newBase).language
+        super.attachBaseContext(LocaleHelper.wrap(newBase, saved))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -79,6 +106,7 @@ class MainActivity : Activity() {
             sync,
             scope,
         )
+        bannerController = BannerController(this, findViewById(R.id.bannerLayer))
 
         pairingPanel = findViewById(R.id.pairingPanel)
         serverForm = findViewById(R.id.serverForm)
@@ -310,9 +338,15 @@ class MainActivity : Activity() {
     private fun showPairingPanel() {
         playbackJob?.cancel()
         scheduleJob?.cancel()
+        stateJob?.cancel()
         currentPlaylist = null
         isIdle = false
+        activeOverrideId = null
         playerController.stop()
+        // Durante l'associazione il banner non c'entra nulla: si nasconde,
+        // e la chiave azzerata lo fa rimontare quando riparte la riproduzione
+        bannerController.hide()
+        bannerKey = null
         playerStatus.visibility = View.GONE
         pairingPanel.visibility = View.VISIBLE
         serverForm.visibility = View.VISIBLE
@@ -368,7 +402,8 @@ class MainActivity : Activity() {
                         ApiClient.pairStatus(base, start.pollToken)
                     }.getOrNull() ?: continue
                     if (state is ApiClient.PairState.Paired) {
-                        paired = state
+                        // Il chiaro del token è quello ricevuto all'avvio
+                        paired = state.copy(authToken = start.authToken)
                         break
                     }
                     if (state is ApiClient.PairState.Expired) break
@@ -433,9 +468,283 @@ class MainActivity : Activity() {
         return cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
     }
 
+    // Giorno della settimana nella numerazione ISO usata dal CMS:
+    // 1 = lunedì … 7 = domenica. Calendar parte invece dalla domenica.
+    private fun isoDayOfWeekNow(): Int {
+        val cal = java.util.Calendar.getInstance()
+        return when (val d = cal.get(java.util.Calendar.DAY_OF_WEEK)) {
+            java.util.Calendar.SUNDAY -> 7
+            else -> d - 1
+        }
+    }
+
+    // Ciclo di stato: risposta leggerissima, interrogata spesso, così una
+    // diretta avviata dal CMS compare sugli schermi in pochi secondi.
+    private fun startStateLoop() {
+        stateJob?.cancel()
+        stateJob = scope.launch {
+            var interval = 10
+            while (isActive) {
+                delay(interval * 1_000L)
+                val base = prefs.baseUrl ?: continue
+                val token = prefs.authToken ?: continue
+                val state = runCatching { ApiClient.state(base, token) }.getOrNull() ?: continue
+                interval = state.stateInterval.coerceIn(5, 60)
+                applyOverride(state.override)
+
+                // La version è la stessa impronta che accompagna la playlist:
+                // se è cambiata, una modifica fatta dal CMS attende solo di
+                // essere applicata. Si sveglia subito il ciclo di sync invece
+                // di lasciar passare l'intero intervallo di polling.
+                val applied = currentPlaylist?.version
+                if (state.playlistVersion.isNotBlank() && applied != null
+                    && state.playlistVersion != applied
+                ) {
+                    syncWake.trySend(Unit)
+                }
+            }
+        }
+    }
+
+    // Entra o esce dalla diretta. Uscendo, la playlist normale riprende
+    // dallo stato in cui era: non è mai stata modificata.
+    // Oltre questa deriva si corregge la posizione; sotto, si lascia stare:
+    // l'elapsed del server ha la precisione del secondo e un ri-allineamento
+    // continuo produrrebbe solo scatti visibili senza guadagno reale
+    private companion object {
+        const val SYNC_TOLERANCE_MS = 3_500L
+        // Durante lo sforamento di un video la fine del file si ri-aggancia
+        // da sola: il riallineamento a strappo interverrebbe a metà scena.
+        // Oltre questa soglia però il video è considerato bloccato e la
+        // rete di sicurezza torna a valere.
+        const val VIDEO_OVERRUN_GRACE_MS = 15_000L
+    }
+
+    private fun applyOverride(override: Override?) {
+        if (override != null && override.id == activeOverrideId
+            && (override.type != "gallery" || override.itemsSig == activeOverrideSig)
+        ) {
+            // Nessun cambiamento di contenuto: per le gallerie si sfrutta il
+            // battito per correggere l'eventuale deriva. L'elapsed appena
+            // ricevuto È l'orologio del server: chi ha accumulato scarto
+            // (buffering, un video dalla durata stimata male) rientra.
+            if (override != null && override.type == "gallery" && gallerySlots.isNotEmpty()) {
+                galleryAnchor = override.parsedAtRealtime - override.elapsedSeconds * 1_000L
+                // L'aggancio ordinario è del player, a ogni cambio di file;
+                // il ri-allineamento duro scatta solo oltre la tolleranza
+                playerController.updateAnchor(galleryAnchor)
+                realignGallery()
+            }
+            return
+        }
+
+        if (override == null) {
+            if (activeOverrideId == null) {
+                return // non c'era nulla in onda: nulla da riprendere
+            }
+            android.util.Log.i("FPS", "Diretta terminata: riprende la programmazione")
+            activeOverrideId = null
+            activeOverrideSig = null
+            isIdle = false
+            val pl = currentPlaylist
+            if (pl != null) {
+                applySchedule(pl, force = true)
+            } else {
+                // Non c'è una programmazione da riprendere: meglio dirlo
+                // che lasciare uno schermo nero senza spiegazioni
+                playerController.stop()
+                showPlayerStatus(R.string.status_empty)
+            }
+            return
+        }
+
+        android.util.Log.i("FPS", "Diretta ${override.id} «${override.name}» da ${override.elapsedSeconds}s")
+        activeOverrideId = override.id
+
+        // Galleria intera: si riusa il player della playlist, con transizioni
+        // e durate dei singoli file. Non serve un percorso di riproduzione a
+        // parte, serve solo un'altra lista.
+        if (override.type == "gallery") {
+            activeOverrideSig = override.itemsSig
+            scope.launch {
+                showPlayerStatus(R.string.status_syncing)
+                // Da state.php arriva solo l'impronta: l'elenco intero sta
+                // nella playlist, che si scarica al bisogno
+                val pieno = if (override.items.isNotEmpty()) override else fetchFullOverride(override.id)
+                if (activeOverrideId != override.id) return@launch
+                if (pieno == null) {
+                    activeOverrideId = null
+                    activeOverrideSig = null
+                    android.util.Log.w("FPS", "Diretta ${override.id}: elenco non recuperato, riprovo")
+                    return@launch
+                }
+                val pronti = sync.ensureOverrideItems(pieno)
+                if (pronti.isEmpty()) {
+                    // Nulla in cache: si riprova al giro successivo invece di
+                    // lasciare lo schermo fermo per tutta la diretta
+                    activeOverrideId = null
+                    activeOverrideSig = null
+                    android.util.Log.w("FPS", "Diretta ${override.id}: nessun file pronto, riprovo")
+                    return@launch
+                }
+                if (pronti.size != pieno.items.size) {
+                    // Con file mancanti la timeline di questo schermo non può
+                    // coincidere con quella degli altri: si riproduce comunque,
+                    // ma va detto nei log
+                    android.util.Log.w("FPS", "Diretta ${override.id}: ${pieno.items.size - pronti.size} file mancanti, sincronia parziale")
+                }
+                hidePlayerStatus()
+                // La timeline: ogni immagine occupa transizione+esposizione
+                // (esattamente ciò che il player pianifica), ogni video la sua
+                // durata reale letta dal file. Stessi file su tutti gli
+                // schermi, stessi numeri su tutti gli schermi.
+                gallerySlots = pronti.map { item ->
+                    if (item.type == "video") {
+                        sync.probeVideoDurationMs(item) ?: 10_000L
+                    } else {
+                        item.transitionMs + item.duration.coerceAtLeast(1) * 1_000L
+                    }
+                }
+                // L'elapsed vale all'istante del parse della risposta, non
+                // adesso: nel mezzo ci sono stati i download della galleria
+                galleryAnchor = override.parsedAtRealtime - override.elapsedSeconds * 1_000L
+                playerController.playSynced(
+                    Playlist(
+                        screenName = pieno.galleryName,
+                        version = "live-${override.id}-${override.itemsSig}",
+                        pollInterval = prefs.pollInterval,
+                        items = pronti,
+                    ),
+                    gallerySlots,
+                    galleryAnchor,
+                )
+            }
+            return
+        }
+        activeOverrideSig = null
+
+        scope.launch {
+            // I file si scaricano in cache; i flussi esterni si riproducono
+            // direttamente dalla rete
+            val file = if (override.type == "media") sync.ensureOverrideCached(override) else null
+            if (activeOverrideId != override.id) return@launch
+            if (override.type == "media" && file == null) {
+                // Si azzera l'id così il ciclo successivo riprova il download:
+                // senza questo lo schermo resterebbe fermo sulla sincronizzazione
+                activeOverrideId = null
+                showPlayerStatus(R.string.status_syncing)
+                android.util.Log.w("FPS", "Diretta ${override.id}: file non disponibile, riprovo")
+                return@launch
+            }
+            hidePlayerStatus()
+            playerController.playOverride(override, file)
+        }
+    }
+
+    // Lingua decisa nel CMS. Cambiarla richiede di ricostruire l'activity:
+    // è l'unico modo perché le risorse già risolte vengano rilette. Succede
+    // solo quando cambia davvero, quindi la riproduzione non ne risente.
+    private fun applyLanguage(playlist: Playlist) {
+        val wanted = playlist.language
+        if (!LocaleHelper.isSupported(wanted) || wanted == prefs.language) {
+            return
+        }
+        android.util.Log.i("FPS", "Lingua dell'interfaccia: $wanted")
+        prefs.language = wanted
+        recreate()
+    }
+
+    // Monta o smonta il banner in sovraimpressione. Si ricostruisce solo
+    // quando la configurazione cambia davvero: ogni polling altrimenti
+    // ricreerebbe le view e farebbe sfarfallare il riquadro.
+    private fun applyBanner(playlist: Playlist) {
+        val config = playlist.banner
+        val key = config?.let {
+            listOf(
+                it.position, it.size, it.opacity, it.showDate,
+                it.showTime, it.dateFormat, it.logoTag,
+            ).joinToString("|")
+        }
+        if (key == bannerKey) return
+        bannerKey = key
+        scope.launch {
+            val logo = sync.ensureBannerLogo(config)
+            bannerController.apply(config, logo)
+            // Logo atteso ma non arrivato (server irraggiungibile, errore
+            // temporaneo): il banner intanto mostra data e ora, e la chiave
+            // azzerata fa riprovare il download al polling successivo
+            if (config?.logoUrl != null && logo == null) {
+                bannerKey = null
+            }
+        }
+    }
+
+    // Confronta la posizione reale nel ciclo con quella attesa e, se la
+    // deriva supera la tolleranza, riposiziona. È questo che rende la
+    // sincronia definitiva: anche partendo perfetti, ore di riproduzione
+    // accumulano scarti — e ogni battito di stato li azzera.
+    private fun realignGallery() {
+        val slots = gallerySlots
+        if (slots.isEmpty()) return
+        val cycle = slots.sum().coerceAtLeast(1L)
+        val atteso = ((SystemClock.elapsedRealtime() - galleryAnchor) % cycle + cycle) % cycle
+        val reale = playerController.playbackGlobalMs() ?: return
+        // Deriva circolare: a fine ciclo 100 ms e cycle-100 ms sono vicini
+        val diff = ((atteso - reale) % cycle + cycle) % cycle
+        val deriva = minOf(diff, cycle - diff)
+        // Un video che sta sforando il proprio slot si corregge da solo
+        // alla propria fine: qui si interviene solo se è rimasto indietro
+        // così tanto da sembrare bloccato
+        if (deriva <= SYNC_TOLERANCE_MS) return
+        if (playerController.inVideoOverrun() && deriva <= VIDEO_OVERRUN_GRACE_MS) {
+            android.util.Log.i("FPS", "Diretta: video oltre il suo slot di ${deriva} ms, attendo la sua fine")
+            return
+        }
+        run {
+            android.util.Log.i("FPS", "Diretta: deriva di ${deriva} ms, riallineo")
+            playerController.playSynced(
+                Playlist(
+                    screenName = "",
+                    version = "live-realign",
+                    pollInterval = prefs.pollInterval,
+                    items = playerControllerItems() ?: return,
+                ),
+                slots,
+                galleryAnchor,
+            )
+        }
+    }
+
+    private fun playerControllerItems(): List<PlaylistItem>? = playerController.currentItems()
+
+    // Elenco completo di una diretta su galleria: sta nella playlist, che
+    // lo porta per intero (state.php manda solo l'impronta)
+    private suspend fun fetchFullOverride(overrideId: Int): Override? {
+        val base = prefs.baseUrl ?: return null
+        val token = prefs.authToken ?: return null
+        return runCatching {
+            Playlist.parse(ApiClient.playlistRaw(base, token)).override
+        }.getOrNull()?.takeIf { it.id == overrideId && it.items.isNotEmpty() }
+    }
+
     // Applica lo stato di programmazione corrente. Ritorna true se in fascia.
     private fun applySchedule(playlist: Playlist, force: Boolean): Boolean {
-        val active = playlist.isActiveAt(minuteOfDayNow())
+        // Durante una diretta il programma ordinario resta sospeso
+        if (activeOverrideId != null) {
+            return false
+        }
+        val active = playlist.isActiveAt(isoDayOfWeekNow(), minuteOfDayNow())
+        // Traccia i passaggi dentro/fuori fascia: è la prima cosa da
+        // guardare quando uno schermo "non si accende" a un certo orario
+        if (active != wasActive) {
+            wasActive = active
+            android.util.Log.i(
+                "FPS",
+                "Programmazione: " + (if (active) "in fascia" else "fuori fascia") +
+                    " (giorno " + isoDayOfWeekNow() + ", " + minuteOfDayNow() / 60 + ":" +
+                    "%02d".format(minuteOfDayNow() % 60) + ", fasce " + playlist.scheduleBands.size + ")"
+            )
+        }
         if (active && (isIdle || force)) {
             isIdle = false
             hidePlayerStatus()
@@ -452,6 +761,8 @@ class MainActivity : Activity() {
         pairingJob?.cancel()
         pairingPanel.visibility = View.GONE
         showPlayerAutostartHint()
+
+        startStateLoop()
 
         // Sentinella oraria: entra/esce dalle fasce anche senza rete
         scheduleJob?.cancel()
@@ -476,7 +787,9 @@ class MainActivity : Activity() {
             if (cached != null && cached.items.isNotEmpty()) {
                 currentPlaylist = cached
                 playingKey = playKey(cached)
+                applyLanguage(cached)
                 applySchedule(cached, force = true)
+                applyBanner(cached)
             } else {
                 showPlayerStatus(R.string.status_syncing)
             }
@@ -486,10 +799,15 @@ class MainActivity : Activity() {
                     val fresh = sync.sync()
                     if (fresh != null) {
                         if (fresh.items.isEmpty()) {
-                            playerController.stop()
                             currentPlaylist = null
                             playingKey = null
-                            showPlayerStatus(R.string.status_empty)
+                            // Con una diretta in corso il player sta
+                            // riproducendo LEI, non la playlist: fermarlo
+                            // qui la ucciderebbe in silenzio a ogni polling
+                            if (activeOverrideId == null) {
+                                playerController.stop()
+                                showPlayerStatus(R.string.status_empty)
+                            }
                         } else {
                             // currentPlaylist sempre aggiornata: anche a parità di
                             // contenuti le fasce orarie possono essere cambiate.
@@ -501,7 +819,9 @@ class MainActivity : Activity() {
                             idleKey = newIdleKey
                             val changed = playKey(fresh) != playingKey
                             playingKey = playKey(fresh)
+                            applyLanguage(fresh)
                             applySchedule(fresh, force = changed || (idleChanged && isIdle))
+                            applyBanner(fresh)
                         }
                     } else if (playingKey == null) {
                         showPlayerStatus(R.string.status_error)
@@ -518,7 +838,11 @@ class MainActivity : Activity() {
                     // uno schermo in vetrina deve riprovare, sempre
                     android.util.Log.w("FPS", "Errore imprevisto nel sync, riprovo", e)
                 }
-                delay(prefs.pollInterval.coerceAtLeast(15) * 1_000L)
+                // Attesa interrompibile: il ciclo di stato può svegliarla
+                // appena si accorge che il CMS ha cambiato qualcosa
+                withTimeoutOrNull(prefs.pollInterval.coerceAtLeast(15) * 1_000L) {
+                    syncWake.receive()
+                }
             }
         }
     }

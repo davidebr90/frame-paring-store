@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Conferma del pairing: l'admin digita il PIN mostrato dalla TV,
 // oppure arriva qui dal QR con ?code= precompilato (metodo 'qr').
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 require_cap('screen.pair');
 
 $prefill = preg_match('/^\d{6}$/', (string) ($_GET['code'] ?? '')) === 1
@@ -17,47 +17,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $method = ($_POST['origin'] ?? '') === 'qr' ? 'qr' : 'pin';
 
     if (preg_match('/^\d{6}$/', $code) !== 1) {
-        $error = 'Il codice è di 6 cifre';
+        $error = t('pair.err_format');
     } else {
         $screenId = confirm_pairing($code, $method);
         if ($screenId === null) {
-            $error = 'Codice non valido o scaduto: controlla la TV e riprova';
+            $error = t('pair.err_invalid');
         } else {
-            flash_set('ok', 'Schermo associato! Dagli un nome e assegna le gallerie.');
+            flash_set('ok', t('pair.done'));
             redirect('screen.php?id=' . $screenId);
         }
     }
 }
 
-cms_header('Pairing', 'pair');
+cms_header(t('pair.title'), 'pair');
 ?>
-<div class="main-head">
-  <div>
-    <h1>Associa uno schermo</h1>
-    <div class="sub">Inserisci il codice mostrato sulla TV</div>
+<!-- Pagina a compito singolo: titolo e riquadro al centro dello spazio
+     disponibile, orizzontalmente e verticalmente -->
+<div class="stage-center">
+  <div class="main-head">
+    <div>
+      <h1><?= e(t('pair.title')) ?></h1>
+      <div class="sub"><?= e(t('pair.subtitle')) ?></div>
+    </div>
   </div>
-</div>
 
-<div class="card" style="max-width:460px">
+  <div class="card">
   <?php if ($error): ?><div class="flash flash-err"><?= e($error) ?></div><?php endif; ?>
   <form method="post">
     <?= csrf_field() ?>
     <input type="hidden" name="origin" value="<?= $prefill !== '' ? 'qr' : 'pin' ?>">
     <div class="field">
-      <label for="code">Codice di pairing</label>
+      <label for="code"><?= e(t('pair.code')) ?></label>
       <input type="text" id="code" name="code" class="pin-input" inputmode="numeric"
              autocomplete="one-time-code" placeholder="000000" maxlength="6" required
              value="<?= e($prefill) ?>">
     </div>
     <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">
-      Associa schermo
+      <?= e(t('pair.submit')) ?>
     </button>
   </form>
-  <p class="hint" style="margin:16px 0 0">
-    La TV mostra PIN e QR alla prima apertura dell'app. Il codice vale
-    <?= (int) config('pairing_ttl') / 60 ?> minuti; se scade, l'app ne genera uno nuovo da sola.
-    Per il metodo manuale (senza PIN) crea lo schermo in
-    <a href="screens.php">Schermi</a>.
-  </p>
+    <p class="hint" style="margin:16px 0 0"><?= t('pair.hint', [
+      'minutes' => (int) ((int) config('pairing_ttl') / 60),
+      'link'    => '<a href="screens.php">' . e(t('nav.screens')) . '</a>',
+    ]) ?></p>
+  </div>
 </div>
 <?php cms_footer();

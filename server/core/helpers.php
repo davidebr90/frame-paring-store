@@ -49,6 +49,17 @@ function random_hex(): string
     return bin2hex(random_bytes(32));
 }
 
+// Impronta con cui i token vivono nel database: chi legge il database non
+// deve poter impersonare gli schermi. SHA-256 e non bcrypt, di proposito:
+// il token ha 256 bit di entropia veri (non è una password umana), quindi
+// la forza bruta è impossibile a prescindere dalla velocità dell'hash, e
+// serve un'impronta deterministica per cercarlo con l'indice UNIQUE.
+// L'esadecimale è lungo 64 caratteri: le colonne CHAR(64) restano identiche.
+function token_hash(string $token): string
+{
+    return hash('sha256', $token);
+}
+
 function random_pin(): string
 {
     return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -111,7 +122,7 @@ function require_device(): array
     }
 
     $stmt = db()->prepare('SELECT * FROM screens WHERE auth_token = ?');
-    $stmt->execute([$token]);
+    $stmt->execute([token_hash($token)]);
     $screen = $stmt->fetch();
 
     if ($screen === false) {

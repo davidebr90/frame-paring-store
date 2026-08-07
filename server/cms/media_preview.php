@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Anteprima media per il CMS (sessione admin). La cartella uploads è
 // chiusa al web: questo è l'unico modo per vedere i file dal browser.
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 
 $id = (int) ($_GET['id'] ?? 0);
 $stmt = db()->prepare('SELECT filename, mime_type FROM media WHERE id = ?');  // anche nel cestino: serve all'anteprima di ripristino

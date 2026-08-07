@@ -12,6 +12,14 @@
         android:layout_height="match_parent"
         android:clipChildren="true" />
 
+    <!-- Banner in sovraimpressione: livello proprio sopra il player, così
+         non partecipa alle transizioni e sopravvive ai cambi di media -->
+    <FrameLayout
+        android:id="@+id/bannerLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <!-- Messaggio di stato in modalità player (playlist vuota, revoca, ...) -->
     <TextView
         android:id="@+id/playerStatus"

@@ -4,7 +4,7 @@ declare(strict_types=1);
 // Serve il logo personalizzato: uploads/ è chiusa al web.
 // Pubblico (CMS_PUBLIC) perché serve anche a login e setup.
 define('CMS_PUBLIC', true);
-require __DIR__ . '/_cms.php';
+require_once __DIR__ . '/_cms.php';
 
 $file = (string) branding('brand_logo');
 $path = branding_dir() . '/' . basename($file);

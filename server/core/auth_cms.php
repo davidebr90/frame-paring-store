@@ -41,17 +41,68 @@ function current_user(): ?array
     return $user;
 }
 
-function attempt_login(string $username, string $password): bool
+// Esiti del tentativo di accesso. Il blocco è un esito a sé: la pagina
+// deve poter dire "riprova più tardi" invece di "credenziali non valide".
+const LOGIN_OK = 0;
+const LOGIN_BAD = 1;
+const LOGIN_LOCKED = 2;
+
+// Dopo quanti errori scatta il blocco, e per quanto
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCK_MINUTES = 10;
+
+// La chiave lega username e indirizzo: bloccare il solo username
+// permetterebbe a chiunque di chiudere fuori l'amministratore vero, e il
+// solo indirizzo non ferma un attacco distribuito su un utente.
+function login_attempt_key(string $username): string
 {
+    return sha1(mb_strtolower($username) . '|' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+}
+
+function login_locked(string $username): bool
+{
+    $stmt = db()->prepare('SELECT attempts, last_at FROM login_attempts WHERE attempt_key = ?');
+    $stmt->execute([login_attempt_key($username)]);
+    $row = $stmt->fetch();
+    return $row !== false
+        && (int) $row['attempts'] >= LOGIN_MAX_ATTEMPTS
+        && strtotime($row['last_at']) > time() - LOGIN_LOCK_MINUTES * 60;
+}
+
+function login_record_failure(string $username): void
+{
+    // Un blocco scaduto riparte da 1 invece di restare gonfio per sempre
+    db()->prepare('INSERT INTO login_attempts (attempt_key, attempts, last_at)
+                   VALUES (?, 1, NOW())
+                   ON DUPLICATE KEY UPDATE
+                       attempts = IF(last_at < NOW() - INTERVAL ' . LOGIN_LOCK_MINUTES . ' MINUTE, 1, attempts + 1),
+                       last_at = NOW()')
+        ->execute([login_attempt_key($username)]);
+    // Pulizia opportunistica delle righe ormai irrilevanti
+    db()->query('DELETE FROM login_attempts WHERE last_at < NOW() - INTERVAL 1 DAY');
+}
+
+function attempt_login(string $username, string $password): int
+{
+    if (login_locked($username)) {
+        // Niente verifica della password: durante il blocco non si offre
+        // nemmeno l'oracolo del tempo di risposta
+        return LOGIN_LOCKED;
+    }
+
     $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1 AND deleted_at IS NULL');
     $stmt->execute([$username]);
     $row = $stmt->fetch();
 
     if ($row === false || !password_verify($password, $row['password_hash'])) {
-        // Rallenta i tentativi di forza bruta
+        login_record_failure($username);
+        // Rallenta anche il singolo tentativo
         usleep(random_int(300000, 800000));
-        return false;
+        return login_locked($username) ? LOGIN_LOCKED : LOGIN_BAD;
     }
+
+    db()->prepare('DELETE FROM login_attempts WHERE attempt_key = ?')
+        ->execute([login_attempt_key($username)]);
 
     // Il token CSRF nato prima del login non deve sopravvivere all'elevazione
     // di privilegio: si rigenera insieme all'ID di sessione
@@ -60,7 +111,7 @@ function attempt_login(string $username, string $password): bool
     $_SESSION['user_id'] = (int) $row['id'];
     db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')
         ->execute([$row['id']]);
-    return true;
+    return LOGIN_OK;
 }
 
 function logout_user(): void

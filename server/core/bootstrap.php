@@ -25,10 +25,13 @@ if (!is_file($configFile)) {
 }
 $GLOBALS['config'] = require $configFile;
 
-require __DIR__ . '/version.php';
-require __DIR__ . '/db.php';
-require __DIR__ . '/helpers.php';
-require __DIR__ . '/screens.php';
+require_once __DIR__ . '/version.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/i18n.php';
+require_once __DIR__ . '/system_media.php';
+require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/screens.php';
 
 function config(string $key): mixed
 {

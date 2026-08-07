@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  English strings. The default catalogue (values/) is Italian: any key missing
+  here falls back to it, so a partial translation never leaves a blank label.
+  The language is chosen in the CMS and sent with the playlist; the device
+  locale is only the fallback before the first connection.
+-->
+<resources>
+    <string name="setup_subtitle">Screen setup</string>
+    <string name="server_hint">Server URL (e.g. https://yourdomain.com/signage)</string>
+    <string name="start_pairing">Generate pairing code</string>
+    <string name="pairing_wait">Enter this code in the CMS, or scan the QR code</string>
+    <string name="pairing_expired">Code expired, generating a new one…</string>
+    <string name="pairing_countdown">The code renews in %1$d:%2$02d</string>
+    <string name="pairing_renewing">Renewing the code…</string>
+    <string name="manual_title">Manual configuration</string>
+    <string name="manual_hint">Configuration URL from the CMS (claim.php?token=…)</string>
+    <string name="manual_go">Configure</string>
+    <string name="status_connecting">Connecting to the server…</string>
+    <string name="status_error">Server unreachable, retrying…</string>
+    <string name="status_syncing">Downloading content…</string>
+    <string name="status_empty">No content assigned to this screen</string>
+    <string name="status_revoked">Access revoked from the CMS: pairing needed again</string>
+    <string name="autostart_title">Automatic start</string>
+    <string name="autostart_hint">This device needs a permission for the app to restart on its own at power-on. It is granted once.</string>
+    <string name="autostart_button">Enable automatic start</string>
+    <string name="autostart_switch">Start automatically at power-on</string>
+    <string name="autostart_on">Active</string>
+    <string name="autostart_off">Not active — tap to grant the permission</string>
+    <string name="autostart_done">Automatic start active: the app will restart on its own at power-on</string>
+    <string name="autostart_manual">Open Settings → Apps → Frame Paring Store and enable "Display over other apps"</string>
+    <string name="settings_title">Screen settings</string>
+    <string name="settings_hint">Press MENU on the remote (or hold OK) to reopen this screen.</string>
+    <string name="settings_server">Server address</string>
+    <string name="settings_save">Save address</string>
+    <string name="settings_close">Close</string>
+    <string name="settings_unpair">Unpair this screen</string>
+    <string name="settings_unpair_confirm">Press again to confirm unpairing</string>
+    <string name="settings_saved">Address saved: the screen must be paired again with the new server</string>
+    <string name="settings_state_paired">Paired</string>
+    <string name="settings_state_unpaired">Not paired</string>
+
+    <string-array name="months">
+        <item>January</item>
+        <item>February</item>
+        <item>March</item>
+        <item>April</item>
+        <item>May</item>
+        <item>June</item>
+        <item>July</item>
+        <item>August</item>
+        <item>September</item>
+        <item>October</item>
+        <item>November</item>
+        <item>December</item>
+    </string-array>
+</resources>

@@ -5,7 +5,7 @@ declare(strict_types=1);
 // Autenticazione: header "Authorization: Bearer <auth_token>".
 // L'app confronta 'version' con quella in cache: se identica non
 // deve scaricare nulla; altrimenti scarica i soli media con checksum nuovo.
-require __DIR__ . '/_api.php';
+require_once __DIR__ . '/_api.php';
 require_method('GET');
 
 $screen = require_device();

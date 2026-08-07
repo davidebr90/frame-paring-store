@@ -29,8 +29,12 @@
       },
       body: JSON.stringify(data || {})
     }).then(function (res) {
-      return res.json().then(function (json) {
-        if (!res.ok) { throw new Error(json.error || 'Errore di rete'); }
+      // Una risposta non-JSON (pagina d'errore del server, proxy, timeout
+      // dell'hosting) non deve produrre un "Unexpected token" indecifrabile
+      return res.json().catch(function () {
+        throw new Error('HTTP ' + res.status);
+      }).then(function (json) {
+        if (!res.ok) { throw new Error(json.error || 'HTTP ' + res.status); }
         return json;
       });
     });
@@ -212,74 +216,200 @@
   });
 
   /* ---------- Editor fasce orarie (dettaglio schermo) ---------- */
+  /* ---------- Programmazione settimanale ----------
+     Fasce con i giorni in cui valgono, più un'anteprima della settimana che
+     si aggiorna mentre si modifica: si vede subito quando lo schermo resta
+     acceso, senza dover salvare per scoprirlo. */
   var bandsBox = document.getElementById('bands');
   if (bandsBox) {
     var scheduleForm = document.getElementById('schedule-form');
     var idleModeSel = document.getElementById('idle_mode');
     var idleField = document.getElementById('idle-media-field');
+    var weekGrid = document.getElementById('week-grid');
+    var weekTotal = document.getElementById('week-total');
+
+    var GIORNI = JSON.parse(bandsBox.dataset.days || '{}');
+    var PRESETS = JSON.parse(bandsBox.dataset.presets || '{}');
+    var L = JSON.parse(bandsBox.dataset.labels || '{}');
+    var TUTTI = [1, 2, 3, 4, 5, 6, 7];
+
+    function minuti(hhmm) {
+      return parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(3, 5), 10);
+    }
+
+    // Stessa regola del server: una fascia che scavalca la mezzanotte
+    // comincia nel giorno scelto e finisce il mattino dopo
+    function fasciaAttiva(b, giorno, minuto) {
+      var da = minuti(b.from), a = minuti(b.to);
+      if (da === a) { return false; }
+      if (da < a) {
+        return b.days.indexOf(giorno) !== -1 && minuto >= da && minuto < a;
+      }
+      if (b.days.indexOf(giorno) !== -1 && minuto >= da) { return true; }
+      var ieri = giorno === 1 ? 7 : giorno - 1;
+      return b.days.indexOf(ieri) !== -1 && minuto < a;
+    }
+
+    function leggiFasce() {
+      var out = [];
+      Array.prototype.forEach.call(bandsBox.querySelectorAll('.band-row'), function (row) {
+        var from = row.querySelector('.band-from').value;
+        var to = row.querySelector('.band-to').value;
+        if (!from || !to) { return; }
+        var days = [];
+        Array.prototype.forEach.call(row.querySelectorAll('.day-chip input'), function (cb) {
+          if (cb.checked) { days.push(parseInt(cb.value, 10)); }
+        });
+        out.push({ from: from, to: to, days: days });
+      });
+      return out;
+    }
+
+    function aggiornaAnteprima() {
+      if (!weekGrid) { return; }
+      var fasce = leggiFasce().filter(function (b) { return b.days.length > 0; });
+      var minutiAccesi = 0;
+
+      Array.prototype.forEach.call(weekGrid.querySelectorAll('.week-grid-row'), function (row) {
+        var giorno = parseInt(row.dataset.day, 10);
+        Array.prototype.forEach.call(row.querySelectorAll('.cell'), function (cell) {
+          var ora = parseInt(cell.dataset.hour, 10);
+          var acceso = false;
+          for (var m = 0; m < 60; m += 15) {
+            if (fasce.length === 0 || fasce.some(function (b) { return fasciaAttiva(b, giorno, ora * 60 + m); })) {
+              acceso = true; break;
+            }
+          }
+          cell.classList.toggle('on', acceso);
+        });
+      });
+
+      for (var g = 1; g <= 7; g++) {
+        for (var m2 = 0; m2 < 1440; m2 += 5) {
+          if (fasce.length === 0 || fasce.some(function (b) { return fasciaAttiva(b, g, m2); })) {
+            minutiAccesi += 5;
+          }
+        }
+      }
+      if (weekTotal) {
+        var ore = Math.round(minutiAccesi / 6) / 10;
+        weekTotal.textContent = (weekGrid.dataset.hoursLabel || ':n').replace(':n', ore)
+          + (fasce.length === 0 ? ' · ' + (L.none || '') : '');
+      }
+    }
 
     // Costruzione via DOM: i valori non passano mai da innerHTML
-    function addBand(from, to) {
+    function addBand(from, to, days) {
       var row = document.createElement('div');
       row.className = 'band-row';
 
-      var inputFrom = document.createElement('input');
-      inputFrom.type = 'time';
-      inputFrom.className = 'band-from';
-      inputFrom.required = true;
-      inputFrom.value = from || '09:00';
+      var orari = document.createElement('div');
+      orari.className = 'band-times';
 
-      var sep = document.createElement('span');
-      sep.className = 'band-sep';
-      sep.textContent = '→';
+      function campoOra(classe, etichetta, valore) {
+        var wrap = document.createElement('label');
+        wrap.className = 'band-field';
+        var lab = document.createElement('span');
+        lab.textContent = etichetta;
+        var input = document.createElement('input');
+        input.type = 'time';
+        input.className = classe;
+        input.required = true;
+        input.value = valore;
+        input.addEventListener('input', function () { aggiornaAnteprima(); segnalaScavalco(); });
+        wrap.append(lab, input);
+        return wrap;
+      }
 
-      var inputTo = document.createElement('input');
-      inputTo.type = 'time';
-      inputTo.className = 'band-to';
-      inputTo.required = true;
-      inputTo.value = to || '20:00';
+      var campoDa = campoOra('band-from', L.from || 'Dalle', from || '09:00');
+      var campoA = campoOra('band-to', L.to || 'Alle', to || '20:00');
+
+      var nota = document.createElement('span');
+      nota.className = 'band-note';
+      nota.hidden = true;
+      nota.textContent = L.midnight || '';
+
+      function segnalaScavalco() {
+        var f = row.querySelector('.band-from').value;
+        var t = row.querySelector('.band-to').value;
+        nota.hidden = !(f && t && minuti(f) > minuti(t));
+      }
 
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'remove';
-      remove.title = 'Rimuovi fascia';
+      remove.title = L.remove || '';
+      remove.setAttribute('aria-label', L.remove || '');
       remove.textContent = '×';
-      remove.addEventListener('click', function () { row.remove(); });
+      remove.addEventListener('click', function () { row.remove(); aggiornaAnteprima(); });
 
-      row.append(inputFrom, sep, inputTo, remove);
+      orari.append(campoDa, campoA, nota, remove);
+
+      var giorni = document.createElement('div');
+      giorni.className = 'day-chips';
+      var etichettaGiorni = document.createElement('span');
+      etichettaGiorni.className = 'day-chips-label';
+      etichettaGiorni.textContent = L.days || '';
+      giorni.appendChild(etichettaGiorni);
+
+      var scelti = days && days.length ? days : TUTTI;
+      TUTTI.forEach(function (d) {
+        var chip = document.createElement('label');
+        chip.className = 'day-chip';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = d;
+        cb.checked = scelti.indexOf(d) !== -1;
+        cb.addEventListener('change', function () { aggiornaAnteprima(); });
+        var txt = document.createElement('span');
+        txt.textContent = GIORNI[d] || d;
+        chip.append(cb, txt);
+        giorni.appendChild(chip);
+      });
+
+      row.append(orari, giorni);
       bandsBox.appendChild(row);
+      segnalaScavalco();
     }
 
-    (JSON.parse(bandsBox.dataset.bands || '[]') || []).forEach(function (b) {
-      addBand(b.from, b.to);
+    function caricaFasce(elenco) {
+      bandsBox.textContent = '';
+      (elenco || []).forEach(function (b) { addBand(b.from, b.to, b.days); });
+      aggiornaAnteprima();
+    }
+
+    caricaFasce(JSON.parse(bandsBox.dataset.bands || '[]'));
+
+    document.getElementById('band-add').addEventListener('click', function () {
+      addBand();
+      aggiornaAnteprima();
     });
 
-    document.getElementById('band-add').addEventListener('click', function () { addBand(); });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (btn) {
+      btn.addEventListener('click', function () {
+        caricaFasce(PRESETS[btn.dataset.preset] || []);
+      });
+    });
 
     scheduleForm.addEventListener('submit', function (ev) {
-      var bands = [];
-      var invalid = null;
-      Array.prototype.forEach.call(bandsBox.querySelectorAll('.band-row'), function (row) {
-        var from = row.querySelector('.band-from').value;
-        var to = row.querySelector('.band-to').value;
-        if (!from || !to || from === to) { invalid = invalid || row; return; }
-        bands.push({ from: from, to: to });
-      });
-      // Mai scartare fasce in silenzio: si blocca il salvataggio e si segnala
-      if (invalid) {
+      var fasce = leggiFasce();
+      var senzaGiorni = fasce.filter(function (b) { return b.days.length === 0; });
+      if (senzaGiorni.length) {
         ev.preventDefault();
-        invalid.querySelector('.band-from').focus();
-        toast('Fascia incompleta: inizio e fine devono essere valorizzati e diversi', true);
+        alert(L.errDays || '');
         return;
       }
-      document.getElementById('schedule-json').value = JSON.stringify(bands);
+      document.getElementById('schedule-json').value = JSON.stringify(fasce);
     });
 
-    function syncIdleField() {
-      idleField.style.display = idleModeSel.value === 'image' ? '' : 'none';
+    // L'immagine di cortesia serve solo se si è scelto di mostrarne una
+    if (idleModeSel && idleField) {
+      var mostraIdle = function () {
+        idleField.style.display = idleModeSel.value === 'image' ? '' : 'none';
+      };
+      idleModeSel.addEventListener('change', mostraIdle);
+      mostraIdle();
     }
-    idleModeSel.addEventListener('change', syncIdleField);
-    syncIdleField();
 
     /* Upload diretto dell'immagine di cortesia (galleria di servizio) */
     var idleBtn = document.getElementById('idle-upload-btn');
@@ -422,6 +552,196 @@
       if (ev.key === 'Escape' && !featureModal.hidden) { closeFeatureModal(); }
     });
   }
+
+  /* ---------- Dirette: sorgente e selezione schermi ---------- */
+  document.addEventListener('change', function (ev) {
+    var radio = ev.target.closest('[data-source]');
+    if (!radio) { return; }
+    document.querySelectorAll('[data-source-panel]').forEach(function (panel) {
+      panel.hidden = panel.dataset.sourcePanel !== radio.value;
+    });
+    // Con una galleria intera ogni file porta già il proprio adattamento e
+    // la propria rotazione: offrirne altri qui creerebbe una doppia
+    // trasformazione difficile da prevedere
+    document.querySelectorAll('[data-not-gallery]').forEach(function (el) {
+      el.hidden = radio.value === 'gallery';
+    });
+    // Anche gli scostamenti del singolo schermo non si applicano a una
+    // galleria: mostrarli prometterebbe un effetto che non ci sarà.
+    // Serve una classe, non l'attributo hidden: quello lo governa già la
+    // casella di selezione dello schermo.
+    document.body.classList.toggle('live-gallery', radio.value === 'gallery');
+  });
+
+  // Le impostazioni di uno schermo compaiono solo quando lo si sceglie:
+  // mostrarle tutte trasformerebbe l'elenco in un muro di menu a tendina
+  function aggiornaOpzioniSchermo(cb) {
+    var box = document.querySelector('[data-screen-opts="' + cb.value + '"]');
+    if (box) { box.hidden = !cb.checked; }
+  }
+  document.addEventListener('change', function (ev) {
+    if (ev.target.matches('[data-screen-check]')) { aggiornaOpzioniSchermo(ev.target); }
+  });
+  document.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-select-all], [data-select-none]')) {
+      setTimeout(function () {
+        document.querySelectorAll('[data-screen-check]').forEach(aggiornaOpzioniSchermo);
+  // Stato iniziale: la sorgente selezionata nel markup deve governare i
+  // blocchi fin dal caricamento, non solo dopo il primo cambio
+  var sorgenteIniziale = document.querySelector('[data-source]:checked');
+  if (sorgenteIniziale) {
+    sorgenteIniziale.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+      }, 0);
+    }
+  });
+  document.querySelectorAll('[data-screen-check]').forEach(aggiornaOpzioniSchermo);
+  // Stato iniziale: la sorgente selezionata nel markup deve governare i
+  // blocchi fin dal caricamento, non solo dopo il primo cambio
+  var sorgenteIniziale = document.querySelector('[data-source]:checked');
+  if (sorgenteIniziale) {
+    sorgenteIniziale.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  document.addEventListener('click', function (ev) {
+    var all = ev.target.closest('[data-select-all]');
+    var none = ev.target.closest('[data-select-none]');
+    if (!all && !none) { return; }
+    document.querySelectorAll('[data-screen-check]').forEach(function (cb) {
+      cb.checked = !!all;
+    });
+  });
+
+  /* ---------- Spia delle dirette nel menu ----------
+     Si aggiorna da sola: senza questo aggiornamento una diretta avviata da
+     un altro operatore resterebbe invisibile fino al ricaricamento. */
+  var navDot = document.querySelector('.nav-dot');
+  if (navDot) {
+    var STATES = ['live', 'recent', 'error', 'idle'];
+    setInterval(function () {
+      if (document.hidden) { return; } // scheda in secondo piano: si risparmia
+      fetch('live_status.php', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          if (!s || STATES.indexOf(s.state) === -1) { return; }
+          STATES.forEach(function (k) { navDot.classList.remove('nav-dot-' + k); });
+          navDot.classList.add('nav-dot-' + s.state);
+          navDot.title = s.label;
+          navDot.setAttribute('aria-label', s.label);
+        })
+        .catch(function () { /* rete assente: si tiene l'ultimo stato noto */ });
+    }, 20000);
+  }
+
+  /* ---------- Suggerimenti ----------
+     L'attributo title non compare mai su un dispositivo touch, e dentro una
+     tabella che scorre verrebbe comunque tagliato. Qui il suggerimento è un
+     elemento fisso posizionato sull'elemento: si apre al passaggio del mouse,
+     al tocco e da tastiera.
+     Si aggancia al solo attributo data-tip: la classe .tip è l'aspetto del
+     marcatore, e imporla a un elemento che ha già una sua forma — la
+     striscia della settimana, un'icona — la deformerebbe. */
+  var tipBox = null;
+  var tipTarget = null;
+  // Da cosa è stato aperto: al tocco il focus arriva PRIMA del click, e
+  // senza distinguerli il click richiuderebbe subito ciò che il focus
+  // ha appena aperto — il suggerimento non comparirebbe mai su telefono
+  var tipSource = null;
+
+  function tipHide() {
+    if (tipBox) { tipBox.classList.remove('show'); }
+    if (tipTarget) { tipTarget.setAttribute('aria-expanded', 'false'); }
+    tipTarget = null;
+    tipSource = null;
+  }
+
+  function tipShow(el, source) {
+    var testo = el.dataset.tip;
+    if (!testo) { return; }
+    if (!tipBox) {
+      tipBox = document.createElement('div');
+      tipBox.className = 'tip-box';
+      tipBox.setAttribute('role', 'tooltip');
+      document.body.appendChild(tipBox);
+    }
+    tipBox.textContent = testo;
+    tipBox.classList.add('show');
+    tipTarget = el;
+    tipSource = source;
+    el.setAttribute('aria-expanded', 'true');
+
+    // Posizionamento: sopra l'elemento, rientrato se sborderebbe
+    var r = el.getBoundingClientRect();
+    var b = tipBox.getBoundingClientRect();
+    var left = r.left + r.width / 2 - b.width / 2;
+    var margine = 8;
+    left = Math.max(margine, Math.min(left, window.innerWidth - b.width - margine));
+    var top = r.top - b.height - 10;
+    var sotto = top < margine;
+    if (sotto) { top = r.bottom + 10; }
+    tipBox.style.left = left + 'px';
+    tipBox.style.top = top + 'px';
+    tipBox.classList.toggle('below', sotto);
+  }
+
+  document.addEventListener('mouseover', function (ev) {
+    var el = ev.target.closest('[data-tip]');
+    if (el && el !== tipTarget) { tipShow(el, 'hover'); }
+  });
+  document.addEventListener('mouseout', function (ev) {
+    var el = ev.target.closest('[data-tip]');
+    // Solo ciò che il mouse ha aperto si chiude uscendo: un tocco genera
+    // comunque mouseover/mouseout, che altrimenti richiuderebbero subito
+    if (el && el === tipTarget && tipSource === 'hover' && !el.contains(ev.relatedTarget)) {
+      tipHide();
+    }
+  });
+  document.addEventListener('focusin', function (ev) {
+    var el = ev.target.closest('[data-tip]');
+    // Solo il focus da tastiera: quello che segue un tocco lo gestisce il click
+    if (el && el.matches(':focus-visible')) { tipShow(el, 'focus'); }
+  });
+  document.addEventListener('focusout', function (ev) {
+    if (ev.target.closest('[data-tip]') === tipTarget && tipSource === 'focus') { tipHide(); }
+  });
+  // Tocco: il click apre e richiude, e non deve seguire eventuali link
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest('[data-tip]');
+    if (el) {
+      // Un link o un pulsante con una sua azione deve compierla: il
+      // suggerimento lo si è già visto al passaggio del mouse
+      if (el.tagName === 'A' || el.type === 'submit') { tipHide(); return; }
+      ev.preventDefault();
+      // Si richiude solo se era stato aperto da un tocco precedente:
+      // quello aperto dal passaggio del mouse resta com'è
+      if (el === tipTarget && tipSource === 'tap') { tipHide(); } else { tipShow(el, 'tap'); }
+      return;
+    }
+    tipHide();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { tipHide(); }
+  });
+  window.addEventListener('scroll', tipHide, true);
+  window.addEventListener('resize', tipHide);
+
+  /* ---------- Tabelle su schermo stretto ----------
+     Sotto una certa larghezza le righe diventano schede: ogni cella porta
+     davanti l'intestazione della sua colonna, letta qui dal <thead> così
+     non va ripetuta a mano in ogni pagina (né tradotta due volte). */
+  Array.prototype.forEach.call(document.querySelectorAll('.table-wrap table'), function (table) {
+    var intestazioni = Array.prototype.map.call(
+      table.querySelectorAll('thead th'),
+      function (th) { return th.textContent.trim(); }
+    );
+    if (!intestazioni.length) { return; }
+    Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        var etichetta = intestazioni[i];
+        if (etichetta) { td.setAttribute('data-label', etichetta); }
+      });
+    });
+  });
 
   /* ---------- Campo PIN: solo cifre ---------- */
   var pin = document.querySelector('.pin-input');

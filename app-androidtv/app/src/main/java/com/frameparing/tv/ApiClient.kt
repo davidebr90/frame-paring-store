@@ -28,6 +28,10 @@ object ApiClient {
         val pollToken: String,
         val qrUrl: String,
         val expiresIn: Int,
+        // Consegnato subito, inerte finché l'admin non conferma: nel
+        // database del server vive solo la sua impronta, quindi non
+        // potrebbe arrivare in un momento successivo
+        val authToken: String,
         val brandTitle: String?,    // white label: titolo mostrato sulla TV
         val brandSubtitle: String?,
         val brandAccent: String?,   // colore accento (#rrggbb)
@@ -51,6 +55,7 @@ object ApiClient {
                 pollToken = json.getString("poll_token"),
                 qrUrl = json.getString("qr_url"),
                 expiresIn = json.getInt("expires_in"),
+                authToken = json.getString("auth_token"),
                 brandTitle = brand?.optString("title")?.takeIf { it.isNotBlank() },
                 brandSubtitle = brand?.optString("subtitle")?.takeIf { it.isNotBlank() },
                 brandAccent = brand?.optString("accent")?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) },
@@ -69,8 +74,10 @@ object ApiClient {
             throw e
         }
         when (json.optString("status")) {
+            // Il token NON arriva più da qui: il dispositivo lo possiede
+            // dall'avvio del pairing, questa risposta lo attiva soltanto
             "paired" -> PairState.Paired(
-                authToken = json.getString("auth_token"),
+                authToken = "",
                 screenName = json.getString("screen_name"),
                 pollInterval = json.getInt("poll_interval"),
             )
@@ -95,6 +102,25 @@ object ApiClient {
         conn.readResponse()
     }
 
+    // Stato compatto: poche centinaia di byte, interrogato spesso per
+    // reagire in fretta all'avvio o allo stop di una diretta
+    data class ScreenState(
+        val playlistVersion: String,
+        val override: Override?,
+        val stateInterval: Int,
+    )
+
+    suspend fun state(baseUrl: String, token: String): ScreenState = withContext(Dispatchers.IO) {
+        val conn = open("$baseUrl/api/v1/state.php")
+        conn.setRequestProperty("Authorization", "Bearer $token")
+        val json = JSONObject(conn.readResponse())
+        ScreenState(
+            playlistVersion = json.optString("playlist_version"),
+            override = Override.parse(json.optJSONObject("override")),
+            stateInterval = json.optInt("state_interval", 10),
+        )
+    }
+
     // Scarica su file temporaneo, verifica lo sha1 e solo allora rinomina:
     // in cache non entra mai un file corrotto o troncato.
     suspend fun downloadMedia(item: PlaylistItem, token: String, dest: File): Unit =
@@ -106,6 +132,33 @@ object ApiClient {
                 downloadInto(conn, item, tmp, dest)
             } catch (e: Exception) {
                 tmp.delete() // mai lasciare parziali in cache
+                throw e
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    // Download semplice, senza verifica del checksum: per i file accessori
+    // (oggi il logo del banner) di cui il server non pubblica lo sha1.
+    // Il file appare in cache solo a scaricamento completato.
+    suspend fun downloadTo(url: String, token: String, dest: File): Unit =
+        withContext(Dispatchers.IO) {
+            val tmp = File(dest.parentFile, dest.name + ".part")
+            val conn = open(url)
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            try {
+                if (conn.responseCode !in 200..299) {
+                    throw ApiException(conn.responseCode, "HTTP ${conn.responseCode}")
+                }
+                conn.inputStream.use { input ->
+                    FileOutputStream(tmp).use { output -> input.copyTo(output, 64 * 1024) }
+                }
+                dest.delete()
+                if (!tmp.renameTo(dest)) {
+                    throw ApiException(0, "Impossibile completare il download")
+                }
+            } catch (e: Exception) {
+                tmp.delete()
                 throw e
             } finally {
                 conn.disconnect()

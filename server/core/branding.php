@@ -48,6 +48,16 @@ function branding_logo_url(): ?string
     return 'brand_logo.php?v=' . substr(md5($file), 0, 8);
 }
 
+// Icona della scheda del browser. Se è stato caricato un logo
+// personalizzato vale anche come favicon: su un'installazione white label
+// mostrare il marchio del prodotto sarebbe fuori luogo.
+// $prefix serve alle pagine fuori da cms/ (l'installazione guidata).
+function branding_favicon_url(string $prefix = ''): string
+{
+    $custom = branding_logo_url();
+    return $prefix . ($custom ?? 'assets/img/favicon.ico');
+}
+
 // Il nome mostrato sulla TV: brand_tv_title se valorizzato, altrimenti brand_name
 function branding_tv_title(): string
 {
