@@ -4,7 +4,42 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
-## [1.6.0] — 2026-08-07
+## [1.7.0] — 2026-08-11
+
+Collaudo su Fire TV Stick reale (Fire OS 5, Android 5.1.1 — la generazione
+più vecchia supportata): tre correzioni emerse solo su hardware fisico,
+non riproducibili in emulatore.
+
+### Aggiunto
+
+- **La vetrina resta sempre in vista**: il contenuto in riproduzione ora
+  vive in una finestra di sistema sopra a qualunque altra cosa — notifiche,
+  overlay di altre app e gli avvisi propri di Fire OS come «telecomando non
+  rilevato», che su alcuni Fire Stick compaiono a schermo intero da soli
+  dopo l'accensione. Restano lì, semplicemente non si vedono più. Il
+  telecomando continua a funzionare esattamente come prima (MENU riapre le
+  impostazioni): quella finestra non intercetta input, solo la vista.
+  Richiede il permesso «Visualizza sopra altre app» — sui Fire Stick più
+  vecchi (fino ad Android 5) è già concesso da soli, sui più recenti è lo
+  stesso permesso della sezione *Avvio automatico*, non uno in più da
+  chiedere.
+
+### Corretto
+
+- **Crash all'avvio su Fire OS 5** (schermo nero, l'app si chiudeva subito
+  dopo l'apertura): il framework di telemetria proprietario di Amazon
+  intercetta la lettura delle preferenze dell'app e, chiamato troppo presto
+  nel ciclo di vita, lancia un'eccezione per un proprio bug interno. La
+  lettura della lingua salvata — necessaria prima di mostrare qualunque
+  schermata — ora è isolata: se fallisce, si parte con la lingua del
+  dispositivo, esattamente come quando la preferenza non è ancora
+  impostata. Nessun altro dispositivo ne risente.
+- L'esito di un tentativo di pairing fallito (server non raggiungibile,
+  errore di rete) restava silenzioso; ora lascia una traccia in log,
+  utile per capire a distanza perché un'associazione non riesce.
+- L'avvio automatico dopo il riavvio segnalava un fallimento silenzioso
+  senza lasciare traccia; ora un log conferma se il segnale di sistema è
+  arrivato e se il riavvio dell'app è stato inviato con successo.
 
 ### Aggiornamento
 

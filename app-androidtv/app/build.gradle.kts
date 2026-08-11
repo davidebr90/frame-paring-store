@@ -3,6 +3,12 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Indirizzo del server proposto al primo avvio. Si può cambiare senza
+// toccare questo file, utile per provare su televisori veri (che non sanno
+// cosa sia 10.0.2.2, valido solo dentro l'emulatore):
+//   gradlew assembleDebug -PserverUrl=http://192.168.1.78:8080
+val serverUrl = project.findProperty("serverUrl") as String?
+
 android {
     namespace = "com.frameparing.tv"
     compileSdk = 34
@@ -13,12 +19,12 @@ android {
         minSdk = 22
         targetSdk = 34
         // Allineata a APP_VERSION di server/core/version.php
-        versionCode = 160
-        versionName = "1.6.0"
+        versionCode = 170
+        versionName = "1.7.0"
 
         // URL del server proposto di default nella schermata di primo avvio
-        // (modificabile lì; cambialo qui per pre-configurare le tue build)
-        buildConfigField("String", "DEFAULT_BASE_URL", "\"https://example.com\"")
+        // (modificabile lì; cambialo qui o con -PserverUrl per le tue build)
+        buildConfigField("String", "DEFAULT_BASE_URL", "\"${serverUrl ?: "https://example.com"}\"")
     }
 
     buildFeatures {
@@ -31,7 +37,7 @@ android {
         }
         debug {
             // 10.0.2.2 = localhost del PC visto dall'emulatore Android
-            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8080\"")
+            buildConfigField("String", "DEFAULT_BASE_URL", "\"${serverUrl ?: "http://10.0.2.2:8080"}\"")
         }
     }
 

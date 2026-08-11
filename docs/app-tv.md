@@ -128,8 +128,35 @@ L'app si riavvia da sola quando il dispositivo si accende.
   schermata di sistema giusta: attiva la levetta e torna indietro. Il pulsante
   sparisce da solo quando il permesso è concesso.
 
+> Su alcuni Fire Stick con molte app di sistema Amazon preinstallate (Alexa
+> compresa) il segnale "il dispositivo è pronto" può restare in coda anche
+> oltre un minuto prima di raggiungere un'app di terze parti: non è un
+> guasto, è semplicemente lento a causa del traffico di sistema. Se lo
+> schermo resta nero per un po' dopo l'accensione, di solito basta
+> attendere: l'avvio arriva comunque.
+
 L'app mantiene lo schermo acceso mentre riproduce. Se il *televisore* ha un
 proprio spegnimento automatico, va disattivato dal menu del televisore.
+
+## La vetrina resta sempre in vista
+
+Il contenuto in riproduzione vive in una finestra di sistema sopra a
+qualunque altra cosa: notifiche, overlay di altre app, e gli avvisi propri
+di Fire OS come «telecomando non rilevato», che su alcuni Fire Stick
+compaiono a schermo intero da soli qualche minuto dopo l'accensione. Quegli
+avvisi restano lì — semplicemente non si vedono più.
+
+Il telecomando continua a funzionare come sempre (MENU riapre le
+impostazioni): quella finestra non intercetta nessun input, solo la vista.
+
+Serve il permesso **Visualizza sopra altre app**:
+- fino ad Android 5 è già concesso da solo, nessuna azione richiesta;
+- da Android 6 in poi è lo stesso permesso della sezione *Avvio automatico*
+  qui sopra — se è già stato concesso per quello, vale anche per questo.
+
+Se il permesso manca, il contenuto resta semplicemente nella finestra
+normale dell'app, come nelle versioni precedenti: nessun malfunzionamento,
+solo senza questa protezione in più.
 
 ## Impostazioni dopo l'installazione
 

@@ -66,6 +66,15 @@ class MainActivity : Activity() {
     private lateinit var bannerController: BannerController
     private var bannerKey: String? = null // configurazione già applicata
 
+    // Il contenuto vive sopra a tutto (notifiche, avvisi di sistema) mentre
+    // è in vetrina; torna nella finestra normale quando si aprono le
+    // impostazioni, che vivono lì. Vedi KioskOverlay per il perché.
+    private lateinit var kiosk: KioskOverlay
+    private lateinit var activityRoot: FrameLayout
+    private lateinit var playerContainerView: FrameLayout
+    private lateinit var bannerLayerView: FrameLayout
+    private var kioskActive = false
+
     // Richiesta di sincronizzazione anticipata. CONFLATED: più segnali
     // ravvicinati valgono per uno solo, non si accodano.
     private val syncWake = kotlinx.coroutines.channels.Channel<Unit>(
@@ -88,8 +97,21 @@ class MainActivity : Activity() {
 
     // La lingua va applicata PRIMA che il layout venga gonfiato: dopo,
     // le stringhe già risolte resterebbero nella lingua precedente.
+    //
+    // Su Fire OS 5 il framework di telemetria proprietario di Amazon ("Eve")
+    // aggancia getSharedPreferences() e, chiamato così presto nel ciclo di
+    // vita dell'Activity, va in NullPointerException per un bug suo interno
+    // (EveContextCallback.onGetSharedPreferences -> getResources() su un
+    // contesto ancora nullo). Non è qualcosa che possiamo correggere: si
+    // isola la lettura e, se fallisce, si parte con la lingua del
+    // dispositivo — esattamente il comportamento già previsto quando la
+    // preferenza non è ancora impostata.
     override fun attachBaseContext(newBase: Context) {
-        val saved = Prefs(newBase).language
+        val saved = try {
+            Prefs(newBase).language
+        } catch (_: Exception) {
+            null
+        }
         super.attachBaseContext(LocaleHelper.wrap(newBase, saved))
     }
 
@@ -100,13 +122,12 @@ class MainActivity : Activity() {
 
         prefs = Prefs(this)
         sync = SyncEngine(this, prefs)
-        playerController = PlayerController(
-            this,
-            findViewById<FrameLayout>(R.id.playerContainer),
-            sync,
-            scope,
-        )
-        bannerController = BannerController(this, findViewById(R.id.bannerLayer))
+        playerContainerView = findViewById(R.id.playerContainer)
+        bannerLayerView = findViewById(R.id.bannerLayer)
+        activityRoot = playerContainerView.parent as FrameLayout
+        kiosk = KioskOverlay(this)
+        playerController = PlayerController(this, playerContainerView, sync, scope)
+        bannerController = BannerController(this, bannerLayerView)
 
         pairingPanel = findViewById(R.id.pairingPanel)
         serverForm = findViewById(R.id.serverForm)
@@ -179,6 +200,7 @@ class MainActivity : Activity() {
             return
         }
         unpairArmed = false
+        exitKioskOverlay() // le impostazioni vivono nella finestra normale
         settingsServerInput.setText(prefs.baseUrl ?: BuildConfig.DEFAULT_BASE_URL)
         findViewById<TextView>(R.id.settingsState).setText(
             if (prefs.authToken != null) R.string.settings_state_paired else R.string.settings_state_unpaired
@@ -193,6 +215,25 @@ class MainActivity : Activity() {
     private fun closeSettings() {
         settingsPanel.visibility = View.GONE
         unpairArmed = false
+        enterKioskOverlay() // si torna a vederlo sopra le notifiche di sistema
+    }
+
+    // Sposta il contenuto in vetrina nella finestra sopra-tutto. Chiamata
+    // solo dopo il pairing: prima non c'è ancora nulla da proteggere dagli
+    // avvisi di sistema, e le impostazioni potrebbero già essere aperte.
+    private fun enterKioskOverlay() {
+        if (kioskActive || prefs.authToken == null) return
+        kioskActive = kiosk.attach(playerContainerView) &&
+            kiosk.attach(bannerLayerView) &&
+            kiosk.attach(playerStatus)
+    }
+
+    private fun exitKioskOverlay() {
+        if (!kioskActive) return
+        kiosk.detach(playerContainerView, activityRoot, 0)
+        kiosk.detach(bannerLayerView, activityRoot, 1)
+        kiosk.detach(playerStatus, activityRoot, 2)
+        kioskActive = false
     }
 
     // Cambio di server: il token attuale vale solo per il vecchio host,
@@ -313,6 +354,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         playerController.release()
+        kiosk.release()
         scope.cancel()
         super.onDestroy()
     }
@@ -370,7 +412,8 @@ class MainActivity : Activity() {
                 pairStatus.setText(R.string.status_connecting)
                 val start = try {
                     ApiClient.pairStart(base)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    android.util.Log.w("FPS", "Diagnostica pairing verso $base fallita", e)
                     pairStatus.setText(R.string.status_error)
                     delay(5_000)
                     continue
@@ -757,6 +800,7 @@ class MainActivity : Activity() {
         pairingJob?.cancel()
         pairingPanel.visibility = View.GONE
         showPlayerAutostartHint()
+        enterKioskOverlay()
 
         startStateLoop()
 

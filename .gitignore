@@ -14,6 +14,9 @@ app-androidtv/local.properties
 app-androidtv/.idea/
 *.iml
 
+# APK di prova esportate per un collaudo (build artifact, non sorgente)
+/*.apk
+
 # Stato locale dell'installazione
 server/core/uninstalled.lock
 
