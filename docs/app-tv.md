@@ -51,6 +51,21 @@ va benissimo per provare, ma per un'installazione stabile conviene generare una
 release con una chiave tua (`Build → Generate Signed App Bundle / APK`), che
 attiva anche la minificazione e riduce le dimensioni.
 
+> ⚠️ **Tieni attiva la firma V1 (Jar Signature).** Android sotto la 7.0 —
+> quindi Fire OS 5, cioè i Fire TV Stick di prima e seconda generazione — sa
+> verificare **solo** lo schema V1. Un'APK firmata unicamente V2/V3 su quei
+> dispositivi non si installa e restituisce *«Errore di analisi del
+> pacchetto»*, che sembra un'APK corrotta ma è solo una firma che il sistema
+> non sa leggere. Nella finestra di firma di Android Studio spunta sia **V1**
+> sia **V2**; da riga di comando usa
+> `apksigner sign --v1-signing-enabled true --v2-signing-enabled true`.
+>
+> Per controllare un'APK già firmata:
+> ```
+> apksigner verify --verbose --min-sdk-version 22 app-release.apk
+> ```
+> Deve rispondere `Verified using v1 scheme (JAR signing): true`.
+
 > Le APK firmate con chiavi diverse non si aggiornano a vicenda: se passi da
 > debug a release devi disinstallare prima la versione precedente.
 
