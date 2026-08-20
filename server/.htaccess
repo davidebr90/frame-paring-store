@@ -1,6 +1,19 @@
 # Niente listing delle cartelle
 Options -Indexes
 
+# Limiti upload: su questo hosting (LiteSpeed/LSAPI) il .user.ini da solo
+# non basta, il pannello impone un tetto più basso che solo php_value in
+# .htaccess riesce a scavalcare (verificato). Allineati al tetto configurato
+# dall'app (config.php -> max_upload_bytes, di default 200 MB). Se il tuo
+# hosting non gira su LiteSpeed, questo blocco è innocuo: <IfModule> lo
+# salta del tutto quando il modulo non c'è.
+<IfModule Litespeed>
+    php_value upload_max_filesize 200M
+    php_value post_max_size 200M
+    php_value max_execution_time 120
+    php_value max_input_time 120
+</IfModule>
+
 # Su hosting condiviso (PHP in CGI/FastCGI) l'header Authorization
 # non arriva a PHP: queste regole lo inoltrano come variabile d'ambiente.
 SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1

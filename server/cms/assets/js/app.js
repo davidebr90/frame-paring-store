@@ -58,7 +58,111 @@
     });
   }
 
-  /* ---------- Auto-save metadati media (rotation / fit / durata) ---------- */
+  /* ---------- Miniature ruotate: l'anteprima riflette la rotation reale ----------
+     Il riquadro .media-thumb ha una forma fissa (16:10, per la griglia):
+     ruotare l'immagine al suo interno senza scambiare le dimensioni la
+     ritaglierebbe con l'inquadratura orizzontale poi semplicemente girata,
+     non con quella che avrà davvero su uno schermo ruotato. Le si scambia
+     qui invece che via CSS: il riquadro stesso NON ruota, solo il media al
+     suo interno, quindi il suo ingombro naturale resta sempre quello del
+     riquadro — misurabile senza equivoci con getBoundingClientRect(). */
+  function thumbSwapSize(thumb) {
+    var media = thumb.querySelector('img, video');
+    if (!media) { return; }
+    if (thumb.dataset.rot === '90' || thumb.dataset.rot === '270') {
+      media.style.width = thumb.clientHeight + 'px';
+      media.style.height = thumb.clientWidth + 'px';
+    } else {
+      media.style.width = '';
+      media.style.height = '';
+    }
+  }
+
+  function thumbSwapSizeAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('.media-thumb'), thumbSwapSize);
+  }
+  thumbSwapSizeAll();
+  window.addEventListener('resize', thumbSwapSizeAll);
+
+  /* ---------- Adattamento contenuti per schermo (correzione rotazione) ----------
+     Stesso controllo, due contesti: la scheda "Adattamento contenuti" di uno
+     schermo (screen.php, righe .cfit-row dentro .cfit-list) e, "in
+     emergenza", la card di ogni singolo contenuto nella scheda Contenuti di
+     una galleria (gallery.php, .media-card dentro #media-grid) — in
+     entrambi i casi il contenitore porta lo schermo di riferimento in
+     data-screen, e basta cercare l'antenato più vicino che lo abbia. */
+  document.addEventListener('change', function (ev) {
+    var select = ev.target.closest('[data-screen-media-rotation]');
+    if (!select) { return; }
+    var list = select.closest('[data-screen]');
+    var row = select.closest('.cfit-row, .media-card');
+    var dot = row.querySelector('.save-dot');
+    var thumb = row.querySelector('.media-thumb');
+
+    dot.className = 'save-dot saving';
+    api('screen_media_override', {
+      screen_id: parseInt(list.dataset.screen, 10),
+      media_id: parseInt(select.dataset.id, 10),
+      rotation: select.value
+    })
+      .then(function () {
+        dot.className = 'save-dot saved';
+        // Riflette subito il risultato nella miniatura, senza ricaricare:
+        // "" (torna automatico) usa il valore calcolato salvato in data-auto
+        thumb.dataset.rot = select.value !== '' ? select.value : select.dataset.auto;
+        thumbSwapSize(thumb);
+        setTimeout(function () { dot.className = 'save-dot'; }, 1500);
+      })
+      .catch(function (e) { dot.className = 'save-dot'; toast(e.message, true); });
+  });
+
+  /* ---------- Cambio schermo di riferimento (scheda Contenuti galleria) ----------
+     Cambiare schermo non tocca nulla nel database: ricarica solo i valori
+     mostrati (auto + eventuale correzione), presi da un secondo schermo
+     assegnato alla stessa galleria — la correzione già salvata per il primo
+     resta intatta, indipendente da questa. */
+  var rotationScreenSelect = document.getElementById('rotation-screen-select');
+  if (rotationScreenSelect && mediaGrid) {
+    rotationScreenSelect.addEventListener('change', function () {
+      var screenId = rotationScreenSelect.value;
+      mediaGrid.dataset.screen = screenId;
+      fetch('api.php?action=gallery_screen_rotations&gallery_id=' + mediaGrid.dataset.gallery + '&screen_id=' + screenId, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': CSRF }
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (json) {
+          if (json.error) { throw new Error(json.error); }
+          (json.items || []).forEach(function (item) {
+            var card = mediaGrid.querySelector('.media-card[data-id="' + item.id + '"]');
+            if (!card) { return; }
+            var select = card.querySelector('[data-screen-media-rotation]');
+            var thumb = card.querySelector('.media-thumb');
+            if (select) {
+              select.dataset.auto = item.auto;
+              select.innerHTML = '';
+              var autoOpt = document.createElement('option');
+              autoOpt.value = '';
+              autoOpt.textContent = (window.GV_ROTATION_AUTO_LABEL || 'Automatico (:deg°)').replace(':deg', item.auto);
+              if (item.override === null) { autoOpt.selected = true; }
+              select.appendChild(autoOpt);
+              [0, 90, 180, 270].forEach(function (deg) {
+                var opt = document.createElement('option');
+                opt.value = String(deg);
+                opt.textContent = deg + '°';
+                if (item.override === deg) { opt.selected = true; }
+                select.appendChild(opt);
+              });
+            }
+            thumb.dataset.rot = String(item.override !== null ? item.override : item.auto);
+            thumbSwapSize(thumb);
+          });
+        })
+        .catch(function (e) { toast(e.message, true); });
+    });
+  }
+
+  /* ---------- Auto-save metadati media (fit / transizioni / durata) ---------- */
   document.addEventListener('change', function (ev) {
     var input = ev.target.closest('[data-media-field]');
     if (!input) { return; }
@@ -71,9 +175,7 @@
     api('media_update', payload)
       .then(function () {
         dot.className = 'save-dot saved';
-        var thumb = card.querySelector('.media-thumb');
-        if (input.dataset.mediaField === 'rotation') { thumb.dataset.rot = input.value; }
-        if (input.dataset.mediaField === 'fit') { thumb.dataset.fit = input.value; }
+        if (input.dataset.mediaField === 'fit') { card.querySelector('.media-thumb').dataset.fit = input.value; }
         setTimeout(function () { dot.className = 'save-dot'; }, 1500);
       })
       .catch(function (e) { dot.className = 'save-dot'; toast(e.message, true); });
@@ -95,6 +197,8 @@
   if (dropzone) {
     var fileInput = dropzone.querySelector('input[type=file]');
     var dzLabel = dropzone.querySelector('.dz-label');
+    var dzProgress = dropzone.querySelector('.dz-progress');
+    var dzProgressBar = dropzone.querySelector('.dz-progress-bar');
 
     // Il click sull'input non deve ribollire fino alla dropzone (ricorsione)
     fileInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
@@ -111,13 +215,21 @@
     dropzone.addEventListener('drop', function (ev) { uploadFiles(ev.dataTransfer.files); });
     fileInput.addEventListener('change', function () { uploadFiles(fileInput.files); });
 
+    function setProgress(pct) {
+      if (dzProgressBar) { dzProgressBar.style.width = pct + '%'; }
+    }
+
     function uploadFiles(files) {
       if (!files.length) { return; }
       var queue = Array.prototype.slice.call(files);
+      var total = files.length;
       var done = 0, failed = 0;
+      if (dzProgress) { dzProgress.hidden = false; }
+      setProgress(0);
 
       function next() {
         if (!queue.length) {
+          if (dzProgress) { dzProgress.hidden = true; }
           // Se qualcosa è fallito NON si ricarica subito: l'utente deve poter
           // leggere quali file non sono passati e perché
           if (failed) {
@@ -129,26 +241,54 @@
           return;
         }
         var file = queue.shift();
-        dzLabel.textContent = 'Caricamento ' + (done + failed + 1) + '/' + files.length + ' — ' + file.name;
+        var position = done + failed + 1;
+        setProgress(0);
+        dzLabel.textContent = 'Caricamento ' + position + '/' + total + ' — ' + file.name + ' — 0%';
 
         var form = new FormData();
         form.append('gallery_id', dropzone.dataset.gallery);
         form.append('file', file);
 
-        fetch('api.php?action=upload', {
-          method: 'POST',
-          headers: { 'X-CSRF-Token': CSRF },
-          body: form
-        }).then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
-          .then(function (r) {
-            if (r.ok) { done++; } else { failed++; toast(file.name + ': ' + (r.j.error || 'errore'), true); }
-            next();
-          })
-          .catch(function (err) {
+        // XMLHttpRequest e non fetch: solo xhr.upload espone un evento di
+        // avanzamento durante l'invio del corpo della richiesta — con fetch
+        // l'upload di un file pesante resterebbe senza alcun riscontro
+        // visibile finché il server non risponde, con l'utente che non sa
+        // se è ancora in corso o bloccato.
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'api.php?action=upload');
+        xhr.setRequestHeader('X-CSRF-Token', CSRF);
+        xhr.upload.addEventListener('progress', function (ev) {
+          if (!ev.lengthComputable) { return; }
+          if (ev.loaded >= ev.total) {
+            // Trasferimento concluso: da qui in poi il tempo lo prende
+            // l'elaborazione lato server (checksum, dimensioni immagine),
+            // non più visibile come percentuale — meglio dirlo esplicitamente
+            // che lasciare la barra ferma senza spiegazioni
+            setProgress(100);
+            dzLabel.textContent = 'Caricamento ' + position + '/' + total + ' — ' + file.name + ' — elaborazione…';
+            return;
+          }
+          var pct = Math.round((ev.loaded / ev.total) * 100);
+          setProgress(pct);
+          dzLabel.textContent = 'Caricamento ' + position + '/' + total + ' — ' + file.name + ' — ' + pct + '%';
+        });
+        xhr.addEventListener('load', function () {
+          var j = {};
+          try { j = JSON.parse(xhr.responseText); } catch (e) { /* risposta non-JSON, es. pagina d'errore del server */ }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            done++;
+          } else {
             failed++;
-            toast(file.name + ': ' + (err.message || 'errore di rete'), true);
-            next();
-          });
+            toast(file.name + ': ' + (j.error || 'HTTP ' + xhr.status), true);
+          }
+          next();
+        });
+        xhr.addEventListener('error', function () {
+          failed++;
+          toast(file.name + ': errore di rete', true);
+          next();
+        });
+        xhr.send(form);
       }
       next();
     }

@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Watchdog: risveglio esplicito dello schermo dopo un kill di sistema
+         (vedi WatchdogReceiver) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Da Android 10 il sistema blocca le activity avviate dal background:
          senza questa dichiarazione l'app non comparirebbe nemmeno nella
          schermata "Mostra sopra altre app" e l'avvio al boot fallirebbe -->
@@ -41,6 +44,13 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Raggiunta solo da un PendingIntent nostro (AlarmManager, vedi
+             Watchdog.kt): nessun intent-filter, nessun bisogno di essere
+             esportato ad altre app -->
+        <receiver
+            android:name=".WatchdogReceiver"
+            android:exported="false" />
 
     </application>
 </manifest>

@@ -87,7 +87,7 @@ Playlist completa dello schermo autenticato.
 
 ```json
 {
-  "screen":   { "id": 2, "name": "Vetrina", "orientation": "portrait", "inches": 65 },
+  "screen":   { "id": 2, "name": "Vetrina", "orientation": "portrait", "rotation": 90, "inches": 65 },
   "schedule": {
     "bands":     [ { "from": "09:00", "to": "20:00", "days": [1,2,3,4,5] } ],
     "idle_mode": "image",
@@ -126,10 +126,20 @@ Note sui campi:
   con il proprio orologio secondo `date_format` (`short` → `24/06/2026`,
   `long` → `24 Giugno 2026`), così restano corrette anche offline.
   `logo_tag` cambia a ogni sostituzione del logo e va usato come nome in cache.
+- **`screen.rotation`** (0/90/180/270, senso orario) è di quanto è girato il
+  pannello fisico rispetto al segnale grezzo, sempre orizzontale.
+  `screen.orientation` è la forma che ne deriva (`portrait` per 90°/270°,
+  altrimenti `landscape`) — non va scelta a parte, solo letta.
 - **`override`** descrive la diretta in sovrapposizione attiva su quello
   schermo, o `null`. Vedi *Diretta in sovrapposizione*.
 - **`checksum`** è lo SHA-1 del file: usato come nome in cache, permette di
   riscaricare solo ciò che è realmente cambiato.
+- **`items[].rotation`** per le immagini è già quella EFFETTIVA per questo
+  schermo: il server la calcola da solo confrontando l'orientamento della
+  foto con quello dello schermo (correggendo anche il montaggio), salvo
+  correzione manuale impostata per quella coppia schermo/file. Il client
+  non deve fare altro che applicarla — non è (più) un metadato fisso del
+  file. Per i video resta 0 salvo correzione manuale.
 - **`transition_in`/`out`** arrivano già risolte: il server applica l'eventuale
   override del singolo file sul valore predefinito della galleria.
 - **`bands`** vuoto significa riproduzione continua. `days` usa la

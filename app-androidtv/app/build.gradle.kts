@@ -19,8 +19,8 @@ android {
         minSdk = 22
         targetSdk = 34
         // Allineata a APP_VERSION di server/core/version.php
-        versionCode = 170
-        versionName = "1.7.0"
+        versionCode = 1123
+        versionName = "1.12.3"
 
         // URL del server proposto di default nella schermata di primo avvio
         // (modificabile lì; cambialo qui o con -PserverUrl per le tue build)

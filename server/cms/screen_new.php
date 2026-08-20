@@ -8,13 +8,13 @@ require_cap('screen.manage');
 
 $pdo = db();
 $errors = [];
-$form = ['name' => '', 'diagonal_inches' => '', 'orientation' => 'landscape'];
+$form = ['name' => '', 'diagonal_inches' => '', 'rotation' => 0];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $form['name'] = trim((string) ($_POST['name'] ?? ''));
     $form['diagonal_inches'] = trim((string) ($_POST['diagonal_inches'] ?? ''));
-    $form['orientation'] = (string) ($_POST['orientation'] ?? 'landscape');
+    $form['rotation'] = (int) ($_POST['rotation'] ?? 0);
 
     $inches = $form['diagonal_inches'] === '' ? 0 : (int) $form['diagonal_inches'];
 
@@ -24,17 +24,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($inches < 0 || $inches > 500) {
         $errors[] = t('snew.err_inches');
     }
-    if (!in_array($form['orientation'], ['landscape', 'portrait'], true)) {
-        $errors[] = t('snew.err_orientation');
+    if (!in_array($form['rotation'], [0, 90, 180, 270], true)) {
+        $errors[] = t('snew.err_rotation');
     }
 
     if (!$errors) {
-        $pdo->prepare("INSERT INTO screens (name, diagonal_inches, orientation, claim_token, status)
-                       VALUES (?, ?, ?, ?, 'pending')")
+        // L'orientamento non si sceglie a parte: segue sempre la rotazione
+        // (vedi screen_orientation_for_rotation in core/screens.php)
+        $orientation = screen_orientation_for_rotation($form['rotation']);
+        $pdo->prepare("INSERT INTO screens (name, diagonal_inches, orientation, rotation, claim_token, status)
+                       VALUES (?, ?, ?, ?, ?, 'pending')")
             ->execute([
                 $form['name'],
                 $inches > 0 ? $inches : null,
-                $form['orientation'],
+                $orientation,
+                $form['rotation'],
                 random_hex(),
             ]);
         flash_set('ok', t('snew.created'));
@@ -75,17 +79,38 @@ cms_header(t('snew.title'), 'screens.new');
                value="<?= e($form['diagonal_inches']) ?>" placeholder="<?= e(t('snew.inches_ph')) ?>">
       </div>
       <div class="field">
-        <label for="orientation"><?= e(t('snew.orientation')) ?></label>
-        <select id="orientation" name="orientation">
-          <option value="landscape"<?= $form['orientation'] === 'landscape' ? ' selected' : '' ?>><?= e(t('snew.landscape')) ?></option>
-          <option value="portrait"<?= $form['orientation'] === 'portrait' ? ' selected' : '' ?>><?= e(t('snew.portrait')) ?></option>
+        <label for="rotation"><?= e(t('snew.rotation')) ?></label>
+        <select id="rotation" name="rotation" data-orientation-source>
+          <?php foreach ([0, 90, 180, 270] as $deg): ?>
+          <option value="<?= $deg ?>"<?= $form['rotation'] === $deg ? ' selected' : '' ?>><?= e(t('snew.rot_' . $deg)) ?></option>
+          <?php endforeach; ?>
         </select>
       </div>
+      <div class="field">
+        <span class="hint"><?= e(t('snew.orientation_derived')) ?></span>
+        <div class="mono" data-orientation-label>
+          <?= e(in_array($form['rotation'], [90, 270], true) ? t('snew.portrait') : t('snew.landscape')) ?>
+        </div>
+      </div>
     </div>
+    <p class="hint"><?= e(t('snew.rotation_hint')) ?></p>
     <div class="form-actions">
       <button class="btn btn-primary" type="submit"><?= e(t('snew.submit')) ?></button>
       <a class="btn" href="screens.php"><?= e(t('common.cancel')) ?></a>
     </div>
   </div>
 </form>
+<script>
+  (function () {
+    var select = document.querySelector('[data-orientation-source]');
+    var label = document.querySelector('[data-orientation-label]');
+    if (!select || !label) { return; }
+    var LANDSCAPE = <?= json_encode(t('snew.landscape')) ?>;
+    var PORTRAIT = <?= json_encode(t('snew.portrait')) ?>;
+    select.addEventListener('change', function () {
+      var deg = Number(select.value);
+      label.textContent = (deg === 90 || deg === 270) ? PORTRAIT : LANDSCAPE;
+    });
+  })();
+</script>
 <?php cms_footer();

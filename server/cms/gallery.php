@@ -58,6 +58,43 @@ $stmt = $pdo->prepare('SELECT * FROM media WHERE gallery_id = ? AND deleted_at I
 $stmt->execute([$id]);
 $media = $stmt->fetchAll();
 
+// Schermi a cui questa galleria è davvero assegnata: la correzione manuale
+// della rotazione ha senso solo lì, l'override è per la coppia
+// schermo+media (vedi screen_media_overrides in schema.sql). Serve anche
+// "in emergenza" senza dover uscire dalla scheda Contenuti — vedi
+// gv.rotation_override_hint. Gate dietro screen.manage: stessa capability
+// della pagina schermo dove questa funzione è nata.
+$galleryScreens = [];
+$galleryRotations = [];
+if (current_can('screen.manage')) {
+    $stmt = $pdo->prepare('SELECT s.id, s.name FROM screens s
+                           JOIN screen_galleries sg ON sg.screen_id = s.id
+                           WHERE sg.gallery_id = ? ORDER BY s.name');
+    $stmt->execute([$id]);
+    $galleryScreens = $stmt->fetchAll();
+
+    if ($galleryScreens) {
+        $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
+        $stmt->execute([(int) $galleryScreens[0]['id']]);
+        $refScreen = $stmt->fetch();
+
+        $stmt = $pdo->prepare('SELECT m.id, m.type, m.filename, m.width, m.height,
+                                       smo.rotation AS override_rotation
+                               FROM media m
+                               LEFT JOIN screen_media_overrides smo
+                                      ON smo.screen_id = ? AND smo.media_id = m.id
+                               WHERE m.gallery_id = ? AND m.deleted_at IS NULL');
+        $stmt->execute([(int) $refScreen['id'], $id]);
+        foreach ($stmt->fetchAll() as $row) {
+            $row = media_ensure_dimensions($row);
+            $galleryRotations[(int) $row['id']] = [
+                'auto'     => effective_item_rotation($row, $refScreen, null),
+                'override' => $row['override_rotation'] !== null ? (int) $row['override_rotation'] : null,
+            ];
+        }
+    }
+}
+
 cms_header($gallery['name'], 'galleries');
 ?>
 <div class="main-head">
@@ -117,18 +154,43 @@ cms_header($gallery['name'], 'galleries');
   </form>
 </div>
 
-<?php if ($media): $previewGallery = (int) $gallery['id']; require_once __DIR__ . '/_preview.php'; endif; ?>
+<?php if ($media):
+    $previewGallery = (int) $gallery['id'];
+    $previewScreenOptions = $pdo->query('SELECT id, name FROM screens ORDER BY name')->fetchAll();
+    require_once __DIR__ . '/_preview.php';
+endif; ?>
 
 <div class="dropzone" id="dropzone" data-gallery="<?= (int) $gallery['id'] ?>">
   <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm">
   <div class="dz-label"><?= e(t('gv.dropzone')) ?></div>
   <div class="hint"><?= e(t('gv.dropzone_hint', ['size' => human_bytes((int) config('max_upload_bytes'))])) ?></div>
+  <div class="dz-progress" hidden>
+    <div class="dz-progress-bar"></div>
+  </div>
 </div>
 
-<div class="media-grid" id="media-grid" data-gallery="<?= (int) $gallery['id'] ?>">
-  <?php foreach ($media as $m): ?>
+<?php if (!current_can('screen.manage') || !$galleryScreens): ?>
+<p class="hint"><?= e(current_can('screen.manage') ? t('gv.rotation_no_screens') : t('gv.rotation_moved')) ?></p>
+<?php else: ?>
+<div class="field" style="max-width:320px;margin:4px 0 6px">
+  <label for="rotation-screen-select"><?= e(t('gv.rotation_screen_picker')) ?></label>
+  <select id="rotation-screen-select">
+    <?php foreach ($galleryScreens as $s): ?>
+    <option value="<?= (int) $s['id'] ?>"><?= e($s['name']) ?></option>
+    <?php endforeach; ?>
+  </select>
+</div>
+<p class="hint"><?= e(t('gv.rotation_override_hint')) ?></p>
+<script>var GV_ROTATION_AUTO_LABEL = <?= json_encode(t('sv.rotation_auto_option'), JSON_UNESCAPED_UNICODE) ?>;</script>
+<?php endif; ?>
+
+<div class="media-grid" id="media-grid" data-gallery="<?= (int) $gallery['id'] ?>"<?= $galleryScreens ? ' data-screen="' . (int) $galleryScreens[0]['id'] . '"' : '' ?>>
+  <?php foreach ($media as $m):
+      $rot = $galleryScreens ? ($galleryRotations[(int) $m['id']] ?? ['auto' => 0, 'override' => null]) : null;
+      $effectiveRot = $rot ? ($rot['override'] !== null ? $rot['override'] : $rot['auto']) : 0;
+  ?>
   <div class="media-card" data-id="<?= (int) $m['id'] ?>">
-    <div class="media-thumb" data-rot="<?= (int) $m['rotation'] ?>" data-fit="<?= e($m['fit']) ?>" title="<?= e(t('gv.drag_title')) ?>">
+    <div class="media-thumb" data-rot="<?= $effectiveRot ?>" data-fit="<?= e($m['fit']) ?>" title="<?= e(t('gv.drag_title')) ?>">
       <span class="media-type"><?= $m['type'] === 'video' ? 'video' : 'img' ?></span>
       <?php if ($m['type'] === 'image'): ?>
         <img src="media_preview.php?id=<?= (int) $m['id'] ?>" alt="" loading="lazy">
@@ -140,20 +202,25 @@ cms_header($gallery['name'], 'galleries');
       <div class="media-name" title="<?= e($m['original_name']) ?>"><?= e($m['original_name']) ?></div>
       <div class="media-controls">
         <div>
-          <label><?= e(t('gv.rotation')) ?></label>
-          <select data-media-field="rotation">
-            <?php foreach ([0, 90, 180, 270] as $deg): ?>
-            <option value="<?= $deg ?>"<?= (int) $m['rotation'] === $deg ? ' selected' : '' ?>><?= $deg ?>°</option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div>
           <label><?= e(t('gv.fit')) ?></label>
           <select data-media-field="fit">
             <option value="contain"<?= $m['fit'] === 'contain' ? ' selected' : '' ?>><?= e(t('gv.fit_contain')) ?></option>
             <option value="cover"<?= $m['fit'] === 'cover' ? ' selected' : '' ?>><?= e(t('gv.fit_cover')) ?></option>
           </select>
         </div>
+        <?php if ($rot): ?>
+        <div>
+          <label><?= e(t('gv.rotation')) ?></label>
+          <select data-screen-media-rotation data-id="<?= (int) $m['id'] ?>" data-auto="<?= (int) $rot['auto'] ?>">
+            <option value=""<?= $rot['override'] === null ? ' selected' : '' ?>>
+              <?= e(t('sv.rotation_auto_option', ['deg' => (string) $rot['auto']])) ?>
+            </option>
+            <?php foreach ([0, 90, 180, 270] as $deg): ?>
+            <option value="<?= $deg ?>"<?= $rot['override'] !== null && $rot['override'] === $deg ? ' selected' : '' ?>><?= $deg ?>°</option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <?php endif; ?>
         <div>
           <label><?= e(t('gv.trans_in')) ?></label>
           <select data-media-field="transition_in">

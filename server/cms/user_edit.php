@@ -93,6 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
             flash_set('ok', t('ued.password_reset'));
         }
+    } elseif ($do === 'reset_2fa') {
+        $pdo->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_reset_token = NULL, totp_reset_expires_at = NULL WHERE id = ?')
+            ->execute([$id]);
+        flash_set('ok', t('ued.tfa_reset_done'));
     } elseif ($do === 'delete') {
         if ($isMe) {
             flash_set('err', t('ued.err_self_delete'));
@@ -222,6 +226,22 @@ cms_header($user['full_name'] ?: $user['username'], 'users');
     </div>
     <div class="form-actions"><button class="btn" type="submit"><?= e(t('ued.reset_password')) ?></button></div>
   </form>
+</div>
+
+<div class="card">
+  <h2><?= e(t('tfa.card')) ?></h2>
+  <p class="hint">
+    <?= $user['totp_enabled']
+        ? e(t('ued.tfa_active'))
+        : e(t('ued.tfa_inactive')) ?>
+  </p>
+  <?php if ($user['totp_enabled']): ?>
+  <form method="post" onsubmit="return confirm('<?= e(t('ued.tfa_reset_confirm')) ?>')">
+    <?= csrf_field() ?>
+    <input type="hidden" name="do" value="reset_2fa">
+    <button class="btn btn-danger" type="submit"><?= e(t('ued.tfa_reset_btn')) ?></button>
+  </form>
+  <?php endif; ?>
 </div>
 
 <?php if (!$isMe): ?>

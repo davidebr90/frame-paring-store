@@ -48,6 +48,76 @@ function transition_labels_short(): array
     return array_map(fn (string $k): string => t($k), TRANSITIONS_SHORT);
 }
 
+// `orientation` non è più una scelta indipendente: è la forma che il
+// pannello assume agli occhi di chi guarda, e quella dipende SOLO da
+// quanto è ruotato rispetto al segnale grezzo (sempre orizzontale). Un
+// pannello ruotato di 90° o 270° appare verticale; dritto o capovolto
+// (0°/180°) resta orizzontale. Va sempre scritta insieme a `rotation`,
+// mai scelta a parte: è così che nasceva il disallineamento che rompeva
+// le anteprime (uno schermo "orizzontale" ma ruotato di 90°).
+function screen_orientation_for_rotation(int $rotation): string
+{
+    return ($rotation === 90 || $rotation === 270) ? 'portrait' : 'landscape';
+}
+
+// Foto caricate prima dell'introduzione di width/height non le hanno
+// ancora in tabella: si calcolano al bisogno, una volta sola, e si
+// salvano subito — stessa idea della pulizia opportunistica già usata
+// altrove nel progetto (niente migrazione batch a parte).
+function media_ensure_dimensions(array $media): array
+{
+    if ($media['type'] !== 'image' || $media['width'] !== null) {
+        return $media;
+    }
+    $path = UPLOADS_DIR . '/' . $media['filename'];
+    $dimensions = is_file($path) ? @getimagesize($path) : false;
+    if ($dimensions === false) {
+        return $media; // file mancante o illeggibile: resta senza, niente rotazione automatica
+    }
+    [$width, $height] = $dimensions;
+    db()->prepare('UPDATE media SET width = ?, height = ? WHERE id = ?')
+        ->execute([$width, $height, (int) $media['id']]);
+    $media['width'] = $width;
+    $media['height'] = $height;
+    return $media;
+}
+
+// Rotazione da applicare in riproduzione per QUESTO schermo. L'ordine:
+// 1. un override manuale su questo schermo vince sempre;
+// 2. altrimenti, per le immagini di cui si conosce l'orientamento, si
+//    calcola da sola — vedi il ragionamento sotto;
+// 3. altrimenti (video, o immagine di cui non si conosce ancora
+//    l'orientamento) nessuna rotazione: 0°.
+//
+// Il calcolo compone DUE correzioni indipendenti, non una sola:
+// - la stessa compensazione già usata per il banner (vedi
+//   BannerController.kt sull'app): il buffer grezzo è sempre
+//   orizzontale, quindi per apparire dritto sul pannello — quale che
+//   sia il suo montaggio — un contenuto va predisegnato ruotato di
+//   (360 - screen.rotation) gradi;
+// - +90° in più SOLO se l'orientamento nativo della foto (verticale se
+//   più alta che larga) non coincide con quello dello schermo (portrait
+//   se rotation è 90 o 270): è la parte che allinea il lato lungo della
+//   foto al lato lungo dello schermo, come richiesto.
+// Se invece l'orientamento già coincide, resta solo la prima
+// correzione — serve comunque, altrimenti su schermi ruotati anche le
+// foto "già giuste" apparirebbero storte.
+function effective_item_rotation(array $media, array $screen, ?int $override): int
+{
+    if ($override !== null) {
+        return $override;
+    }
+    if ($media['type'] !== 'image' || $media['width'] === null || $media['height'] === null) {
+        return 0;
+    }
+    $screenRotation = (int) $screen['rotation'];
+    $photoPortrait = (int) $media['height'] > (int) $media['width'];
+    $screenPortrait = screen_orientation_for_rotation($screenRotation) === 'portrait';
+    $matchRotation = $photoPortrait === $screenPortrait ? 0 : 90;
+    $mountCompensation = (360 - $screenRotation) % 360;
+    return ($mountCompensation + $matchRotation) % 360;
+}
+
 // Crea uno schermo 'pending' con PIN univoco. Ritenta in caso di
 // collisione sul codice (violazione della UNIQUE KEY, SQLSTATE 23000).
 function create_pending_screen(?string $deviceInfo): array
@@ -155,14 +225,28 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
         json_error('Impossibile salvare il file (permessi cartella uploads?)', 500);
     }
 
+    // Dimensioni naturali: servono a capire da sole se una foto è verticale
+    // o orizzontale, per la rotazione automatica per schermo (vedi
+    // effective_item_rotation()). Solo immagini: per i video servirebbe
+    // ffprobe, non garantito su ogni hosting — restano senza, rotazione
+    // manuale come prima.
+    $width = null;
+    $height = null;
+    if (str_starts_with($mime, 'image/')) {
+        $dimensions = @getimagesize(UPLOADS_DIR . '/' . $filename);
+        if ($dimensions !== false) {
+            [$width, $height] = $dimensions;
+        }
+    }
+
     $pdo = db();
     $originalName = mb_substr((string) $file['name'], 0, 255);
 
     // sort_order calcolato dentro la INSERT: upload concorrenti nella stessa
     // galleria non possono ottenere la stessa posizione
     $pdo->prepare('INSERT INTO media
-                   (gallery_id, type, filename, original_name, mime_type, filesize, checksum, sort_order)
-                   SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(m.sort_order), -1) + 1
+                   (gallery_id, type, filename, original_name, mime_type, filesize, checksum, width, height, sort_order)
+                   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(m.sort_order), -1) + 1
                    FROM media m WHERE m.gallery_id = ? AND m.deleted_at IS NULL')
         ->execute([
             $galleryId,
@@ -172,6 +256,8 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
             $mime,
             $file['size'],
             sha1_file(UPLOADS_DIR . '/' . $filename),
+            $width,
+            $height,
             $galleryId,
         ]);
     $newId = (int) $pdo->lastInsertId(); // prima di altri statement
@@ -270,7 +356,12 @@ function playlist_for_gallery(array $gallery): array
             'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
             'filesize'       => (int) $row['filesize'],
             'checksum'       => $row['checksum'],
-            'rotation'       => (int) $row['rotation'],
+            // Nessuna rotazione qui: la rotazione si calcola confrontando
+            // l'orientamento della foto con quello di UNO schermo preciso,
+            // e questa è l'anteprima "vergine" di una galleria non ancora
+            // assegnata — l'anteprima per schermo (playlist_for_screen)
+            // mostra invece il calcolo vero
+            'rotation'       => 0,
             'fit'            => $row['fit'],
             'duration'       => (int) $row['duration_seconds'],
             'transition_in'  => $row['trans_in'],
@@ -290,13 +381,82 @@ function playlist_for_gallery(array $gallery): array
     ];
 }
 
+// Anteprima di una galleria COME APPARIREBBE su uno schermo REALE, che sia
+// o no già fra quelli a cui è assegnata — serve a scegliere/verificare la
+// rotazione prima ancora di assegnarla, invece di indovinare. A differenza
+// di playlist_for_gallery() (nessuno schermo vero, sempre orizzontale,
+// rotazione sempre 0) qui la rotazione è quella VERA che si otterrebbe:
+// stesso calcolo di playlist_for_screen(), stesso banner dello schermo.
+function playlist_for_gallery_on_screen(array $gallery, array $screen): array
+{
+    $stmt = db()->prepare('SELECT m.id, m.type, m.filename, m.mime_type, m.filesize, m.checksum,
+                                  m.width, m.height, m.fit, m.duration_seconds, m.muted, m.original_name,
+                                  smo.rotation AS override_rotation,
+                                  COALESCE(m.transition_in,  :t1) AS transition_in,
+                                  COALESCE(m.transition_out, :t2) AS transition_out
+                           FROM media m
+                           LEFT JOIN screen_media_overrides smo
+                                  ON smo.screen_id = :sid AND smo.media_id = m.id
+                           WHERE m.gallery_id = :gid AND m.deleted_at IS NULL
+                           ORDER BY m.sort_order, m.id');
+    $stmt->execute([
+        't1'  => $gallery['transition_default'],
+        't2'  => $gallery['transition_default'],
+        'sid' => $screen['id'],
+        'gid' => $gallery['id'],
+    ]);
+
+    $items = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $row = media_ensure_dimensions($row);
+        $override = $row['override_rotation'] !== null ? (int) $row['override_rotation'] : null;
+        $items[] = [
+            'id'             => (int) $row['id'],
+            'type'           => $row['type'],
+            'mime'           => $row['mime_type'],
+            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
+            'filesize'       => (int) $row['filesize'],
+            'checksum'       => $row['checksum'],
+            'rotation'       => effective_item_rotation($row, $screen, $override),
+            'fit'            => $row['fit'],
+            'duration'       => (int) $row['duration_seconds'],
+            'transition_in'  => $row['transition_in'],
+            'transition_out' => $row['transition_out'],
+            'transition_ms'  => (int) $gallery['transition_duration_ms'],
+            'muted'          => (bool) $row['muted'],
+            'name'           => $row['original_name'],
+        ];
+    }
+
+    return [
+        'screen' => [
+            'id'          => (int) $screen['id'],
+            'name'        => $screen['name'],
+            'orientation' => $screen['orientation'],
+            'rotation'    => (int) $screen['rotation'],
+            'inches'      => $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : null,
+        ],
+        'schedule'      => ['bands' => [], 'idle_mode' => 'black', 'idle_item' => null],
+        'banner'        => function_exists('overlay_payload_for_screen') ? overlay_payload_for_screen($screen) : null,
+        'version'       => sha1(json_encode($items)),
+        'poll_interval' => (int) config('poll_interval'),
+        'items'         => $items,
+    ];
+}
+
 // Impronta della configurazione che il player deve rispettare: media,
 // fasce orarie e contenuto di riposo. Calcolata senza costruire l'intera
 // playlist, così l'endpoint di stato resta leggero.
 function playlist_version(array $screen): string
 {
+    // width/height e l'eventuale override sostituiscono m.rotation qui:
+    // è da questi due che si ricalcola la rotazione effettiva, quindi un
+    // cambiamento di uno dei due (nuova analisi della foto, override
+    // impostato o tolto) deve far scattare un nuovo download tanto quanto
+    // prima faceva un cambio diretto della rotazione.
     $stmt = db()->prepare("SELECT GROUP_CONCAT(CONCAT_WS(':',
-                                  m.id, m.checksum, m.rotation, m.fit, m.duration_seconds,
+                                  m.id, m.checksum, m.width, m.height,
+                                  COALESCE(smo.rotation, -1), m.fit, m.duration_seconds,
                                   m.muted, COALESCE(m.transition_in, g.transition_default),
                                   COALESCE(m.transition_out, g.transition_default),
                                   g.transition_duration_ms)
@@ -304,6 +464,8 @@ function playlist_version(array $screen): string
                            FROM media m
                            JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
                            JOIN galleries g        ON g.id = m.gallery_id
+                           LEFT JOIN screen_media_overrides smo
+                                  ON smo.screen_id = sg.screen_id AND smo.media_id = m.id
                            WHERE sg.screen_id = ?
                              AND m.deleted_at IS NULL AND g.deleted_at IS NULL");
     $stmt->execute([$screen['id']]);
@@ -313,6 +475,9 @@ function playlist_version(array $screen): string
         (string) $screen['schedule_json'],
         (string) $screen['idle_mode'],
         (string) $screen['idle_media_id'],
+        // Il montaggio dello schermo entra qui: cambiandolo cambia la
+        // rotazione calcolata per OGNI foto, anche senza toccarne nessuna
+        (string) $screen['rotation'],
         // Anche il banner fa parte di ciò che la TV deve rispettare
         json_encode(function_exists('overlay_payload_for_screen')
             ? overlay_payload_for_screen($screen)
@@ -327,15 +492,19 @@ function playlist_version(array $screen): string
 // l'app la confronta con quella in cache per decidere se aggiornare.
 function playlist_for_screen(array $screen): array
 {
-    // COALESCE: il media eredita la transizione della galleria salvo override
-    $stmt = db()->prepare('SELECT m.id, m.type, m.mime_type, m.filesize, m.checksum,
-                                  m.rotation, m.fit, m.duration_seconds, m.muted,
+    // COALESCE: il media eredita la transizione della galleria salvo override.
+    // smo.rotation: eventuale correzione manuale SOLO per questo schermo.
+    $stmt = db()->prepare('SELECT m.id, m.type, m.filename, m.mime_type, m.filesize, m.checksum,
+                                  m.width, m.height, m.fit, m.duration_seconds, m.muted,
+                                  smo.rotation AS override_rotation,
                                   COALESCE(m.transition_in,  g.transition_default) AS transition_in,
                                   COALESCE(m.transition_out, g.transition_default) AS transition_out,
                                   g.transition_duration_ms
                            FROM media m
                            JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
                            JOIN galleries g        ON g.id = m.gallery_id
+                           LEFT JOIN screen_media_overrides smo
+                                  ON smo.screen_id = sg.screen_id AND smo.media_id = m.id
                            WHERE sg.screen_id = ?
                              AND m.deleted_at IS NULL AND g.deleted_at IS NULL
                            ORDER BY sg.sort_order, m.gallery_id, m.sort_order, m.id');
@@ -343,6 +512,8 @@ function playlist_for_screen(array $screen): array
 
     $items = [];
     foreach ($stmt->fetchAll() as $row) {
+        $row = media_ensure_dimensions($row);
+        $override = $row['override_rotation'] !== null ? (int) $row['override_rotation'] : null;
         $items[] = [
             'id'             => (int) $row['id'],
             'type'           => $row['type'],
@@ -350,7 +521,7 @@ function playlist_for_screen(array $screen): array
             'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
             'filesize'       => (int) $row['filesize'],
             'checksum'       => $row['checksum'],
-            'rotation'       => (int) $row['rotation'],
+            'rotation'       => effective_item_rotation($row, $screen, $override),
             'fit'            => $row['fit'],
             'duration'       => (int) $row['duration_seconds'],
             'transition_in'  => $row['transition_in'],
@@ -367,9 +538,15 @@ function playlist_for_screen(array $screen): array
 
     $idleItem = null;
     if ($screen['idle_mode'] === 'image' && $screen['idle_media_id'] !== null) {
-        $stmt = db()->prepare("SELECT * FROM media WHERE id = ? AND type = 'image' AND deleted_at IS NULL");
-        $stmt->execute([$screen['idle_media_id']]);
+        $stmt = db()->prepare("SELECT m.*, smo.rotation AS override_rotation
+                               FROM media m
+                               LEFT JOIN screen_media_overrides smo
+                                      ON smo.screen_id = ? AND smo.media_id = m.id
+                               WHERE m.id = ? AND m.type = 'image' AND m.deleted_at IS NULL");
+        $stmt->execute([$screen['id'], $screen['idle_media_id']]);
         if (($m = $stmt->fetch()) !== false) {
+            $m = media_ensure_dimensions($m);
+            $override = $m['override_rotation'] !== null ? (int) $m['override_rotation'] : null;
             $idleItem = [
                 'id'       => (int) $m['id'],
                 'type'     => 'image',
@@ -377,7 +554,7 @@ function playlist_for_screen(array $screen): array
                 'url'      => config('base_url') . '/api/v1/media.php?id=' . $m['id'] . '&idle=1',
                 'filesize' => (int) $m['filesize'],
                 'checksum' => $m['checksum'],
-                'rotation' => (int) $m['rotation'],
+                'rotation' => effective_item_rotation($m, $screen, $override),
                 'fit'      => $m['fit'],
             ];
         }
@@ -388,6 +565,7 @@ function playlist_for_screen(array $screen): array
             'id'          => (int) $screen['id'],
             'name'        => $screen['name'],
             'orientation' => $screen['orientation'],
+            'rotation'    => (int) $screen['rotation'],
             'inches'      => $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : null,
         ],
         'schedule' => [

@@ -209,6 +209,10 @@ data class Playlist(
     val override: Override? = null,                  // diretta in corso
     val banner: Banner? = null,                      // sovraimpressione, null = spenta
     val language: String? = null,                    // lingua scelta nel CMS
+    // Di quanto è girato il pannello fisico rispetto al segnale (0/90/180/270,
+    // senso orario): serve solo a far atterrare la sovraimpressione sul lato
+    // giusto. Le gallerie non c'entrano, hanno una rotazione propria per file.
+    val screenRotation: Int = 0,
 ) {
     fun isActiveAt(dayOfWeek: Int, minuteOfDay: Int): Boolean =
         scheduleBands.isEmpty() || scheduleBands.any { it.contains(dayOfWeek, minuteOfDay) }
@@ -278,6 +282,9 @@ data class Playlist(
                 language = root.optJSONObject("branding")
                     ?.optString("language")
                     ?.takeIf { it.isNotBlank() },
+                screenRotation = root.optJSONObject("screen")
+                    ?.optInt("rotation", 0)
+                    ?.takeIf { it == 90 || it == 180 || it == 270 } ?: 0,
             )
         }
     }

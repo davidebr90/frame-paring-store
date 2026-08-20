@@ -41,12 +41,21 @@ Puoi metterlo nella radice del dominio oppure in una sottocartella:
 | Radice del dominio | `https://tuodominio.it/cms/` |
 | Sottocartella `signage/` | `https://tuodominio.it/signage/cms/` |
 
+Carica anche **`database/schema.sql`**, ma non nella sua sottocartella: va
+messo direttamente accanto a `install.php`, rinominandolo se serve solo per
+chiarezza (il nome del file resta `schema.sql`). L'installazione guidata lo
+cerca lì quando la cartella `database/` del repository non è stata caricata
+(caso comune: si carica solo il contenuto di `server/`, non l'intero
+repository) — senza, il passo 2 si ferma con «File database/schema.sql non
+trovato».
+
 Struttura attesa sul server:
 
 ```
 public_html/
 ├── .htaccess
 ├── install.php      ← procedura guidata, da eliminare al termine
+├── schema.sql        ← database/schema.sql del repository, caricato qui
 ├── api/v1/
 ├── cms/
 ├── core/

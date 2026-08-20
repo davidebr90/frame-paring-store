@@ -40,6 +40,17 @@ CREATE TABLE `users` (
   `last_login_at` DATETIME         NULL,
   `deleted_at`    DATETIME         NULL,   -- cestino: NULL = utente attivo
   `deleted_by`    INT UNSIGNED     NULL,
+  -- Verifica in due passaggi (TOTP). Il segreto resta in chiaro: a
+  -- differenza dei token sotto, va riletto per calcolare i codici, non solo
+  -- confrontato. Si scrive su riga solo a conferma avvenuta (un primo
+  -- codice corretto durante l'attivazione): niente segreti "a metà" salvati
+  -- per un'attivazione mai completata.
+  `totp_secret`    VARCHAR(64)  NULL,
+  `totp_enabled`   TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Reset via email: stesso schema token/impronta di auth_token/poll_token
+  -- (screens), con scadenza e uso singolo.
+  `totp_reset_token`       CHAR(64)  NULL,
+  `totp_reset_expires_at`  DATETIME  NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_users_username` (`username`),
   KEY `idx_users_deleted` (`deleted_at`)
@@ -84,6 +95,13 @@ CREATE TABLE `screens` (
   `device_info`      VARCHAR(255)  NULL,               -- modello/OS dichiarati dall'app
   `diagonal_inches`  SMALLINT UNSIGNED NULL,           -- polliciaggio del pannello fisico (es. 65)
   `orientation`      ENUM('landscape','portrait') NOT NULL DEFAULT 'landscape', -- montaggio fisico
+  `rotation`         SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- 0|90|180|270: di quanto è girato il pannello
+                                                            -- fisico rispetto al segnale (in senso orario).
+                                                            -- Non tocca gallerie/video, che hanno una propria
+                                                            -- rotazione per file: serve solo a far atterrare la
+                                                            -- sovraimpressione sul lato giusto dello schermo
+                                                            -- ruotato, in "alto/basso/sinistra/destra" come li
+                                                            -- vede davvero chi guarda il pannello montato.
   `schedule_json`    TEXT          NULL,               -- fasce orarie attive [{"from":"09:00","to":"20:00"},...]; NULL = sempre attivo
   `idle_mode`        ENUM('black','image') NOT NULL DEFAULT 'black', -- fuori fascia: nero (spento apparente) o immagine di cortesia
   `idle_media_id`    INT UNSIGNED  NULL,               -- immagine di cortesia (un media immagine)
@@ -123,8 +141,14 @@ CREATE TABLE `galleries` (
 
 -- ------------------------------------------------------------
 -- Media (file dentro una galleria)
--- I file NON vengono elaborati lato server: rotation e fit
--- sono metadati che l'app applica in fase di rendering.
+-- I file NON vengono elaborati lato server: fit è un metadato che
+-- l'app applica in fase di rendering. `rotation` invece non è più
+-- quella davvero usata in riproduzione: resta per compatibilità ma
+-- la rotazione effettiva si calcola per schermo (vedi
+-- screen_media_overrides e effective_item_rotation() in
+-- core/screens.php) a partire da `width`/`height` e dal montaggio
+-- di ciascuno schermo — la stessa foto può quindi apparire ruotata
+-- in modo diverso su schermi diversi.
 -- ------------------------------------------------------------
 CREATE TABLE `media` (
   `id`               INT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -135,7 +159,9 @@ CREATE TABLE `media` (
   `mime_type`        VARCHAR(100)  NOT NULL,
   `filesize`         BIGINT UNSIGNED NOT NULL,         -- byte, usato dall'app per validare il download
   `checksum`         CHAR(40)      NOT NULL,           -- sha1 del file, per la cache dell'app
-  `rotation`         SMALLINT UNSIGNED NOT NULL DEFAULT 0,  -- 0 | 90 | 180 | 270
+  `width`            INT UNSIGNED  NULL,               -- dimensioni naturali in pixel; solo immagini,
+  `height`           INT UNSIGNED  NULL,               -- calcolate al caricamento (o al bisogno per i file precedenti)
+  `rotation`         SMALLINT UNSIGNED NOT NULL DEFAULT 0,  -- legacy, non più letta in riproduzione (vedi sopra)
   `fit`              ENUM('contain','cover') NOT NULL DEFAULT 'contain', -- cover = crop a pieno schermo
   `duration_seconds` SMALLINT UNSIGNED NOT NULL DEFAULT 10, -- durata a schermo delle immagini (i video usano la propria)
   `transition_in`    VARCHAR(20)   NULL,                    -- transizione di ENTRATA; NULL = default della galleria
@@ -169,6 +195,29 @@ CREATE TABLE `screen_galleries` (
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_sg_gallery`
     FOREIGN KEY (`gallery_id`) REFERENCES `galleries` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Rotazione di un media forzata per un singolo schermo
+-- Di norma la rotazione si calcola da sola (orientamento della foto
+-- confrontato con quello dello schermo, vedi media.width/height e
+-- screens.rotation): questa tabella esiste solo per chi vuole
+-- correggere a mano il risultato automatico su UNO schermo specifico,
+-- senza toccare né il file né gli altri schermi che condividono la
+-- stessa galleria.
+-- ------------------------------------------------------------
+CREATE TABLE `screen_media_overrides` (
+  `screen_id` INT UNSIGNED NOT NULL,
+  `media_id`  INT UNSIGNED NOT NULL,
+  `rotation`  SMALLINT UNSIGNED NOT NULL,  -- 0|90|180|270; "torna automatico" cancella la riga, non la svuota
+  PRIMARY KEY (`screen_id`, `media_id`),
+  KEY `idx_smo_media` (`media_id`),
+  CONSTRAINT `fk_smo_screen`
+    FOREIGN KEY (`screen_id`) REFERENCES `screens` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_smo_media`
+    FOREIGN KEY (`media_id`) REFERENCES `media` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

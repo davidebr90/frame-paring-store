@@ -64,7 +64,24 @@ switch ($action) {
         $screenId  = (int) ($_GET['screen_id'] ?? 0);
         $galleryId = (int) ($_GET['gallery_id'] ?? 0);
 
-        if ($screenId > 0) {
+        if ($screenId > 0 && $galleryId > 0) {
+            // Una galleria COME APPARIREBBE su questo schermo reale, che sia
+            // o no già fra quelli assegnati — usato dal selettore schermo
+            // dell'anteprima nella scheda Contenuti
+            $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
+            $stmt->execute([$screenId]);
+            $screen = $stmt->fetch();
+            if ($screen === false) {
+                json_error(t('api.screen_not_found'), 404);
+            }
+            $stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ? AND deleted_at IS NULL');
+            $stmt->execute([$galleryId]);
+            $gallery = $stmt->fetch();
+            if ($gallery === false) {
+                json_error(t('api.gallery_not_found'), 404);
+            }
+            $playlist = playlist_for_gallery_on_screen($gallery, $screen);
+        } elseif ($screenId > 0) {
             $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
             $stmt->execute([$screenId]);
             $screen = $stmt->fetch();
@@ -72,9 +89,9 @@ switch ($action) {
                 json_error(t('api.screen_not_found'), 404);
             }
             $playlist = playlist_for_screen($screen);
-            $playlist['screen']['orientation'] = $screen['orientation'];
         } elseif ($galleryId > 0) {
-            // Anteprima di una singola galleria: schermo fittizio orizzontale
+            // Anteprima di una singola galleria senza alcuno schermo reale
+            // (nessuno schermo esiste ancora): schermo fittizio orizzontale
             $stmt = $pdo->prepare('SELECT * FROM galleries WHERE id = ? AND deleted_at IS NULL');
             $stmt->execute([$galleryId]);
             $gallery = $stmt->fetch();
@@ -108,13 +125,6 @@ switch ($action) {
 
         $fields = [];
         $params = [];
-        if (isset($body['rotation'])) {
-            if (!in_array((int) $body['rotation'], [0, 90, 180, 270], true)) {
-                json_error(t('api.bad_rotation'), 422);
-            }
-            $fields[] = 'rotation = ?';
-            $params[] = (int) $body['rotation'];
-        }
         if (isset($body['fit'])) {
             if (!in_array($body['fit'], ['contain', 'cover'], true)) {
                 json_error(t('api.bad_fit'), 422);
@@ -213,6 +223,82 @@ switch ($action) {
         }
         $pdo->commit();
         json_out(['ok' => true]);
+
+    // Correzione manuale della rotazione automatica, valida SOLO per
+    // questo schermo. rotation assente/vuota = torna al calcolo
+    // automatico (si cancella la riga, non si svuota — vedi schema.sql).
+    case 'screen_media_override':
+        require_cap('screen.manage');
+        $screenId = (int) ($body['screen_id'] ?? 0);
+        $mediaId  = (int) ($body['media_id'] ?? 0);
+        $rotationRaw = $body['rotation'] ?? null;
+
+        // Ha senso solo per un media davvero assegnato a quello schermo
+        // tramite una sua galleria: evita override su coppie a caso
+        $stmt = $pdo->prepare('SELECT 1 FROM media m
+                               JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
+                               WHERE sg.screen_id = ? AND m.id = ? AND m.deleted_at IS NULL');
+        $stmt->execute([$screenId, $mediaId]);
+        if ($stmt->fetchColumn() === false) {
+            json_error(t('api.media_not_found'), 404);
+        }
+
+        if ($rotationRaw === null || $rotationRaw === '') {
+            $pdo->prepare('DELETE FROM screen_media_overrides WHERE screen_id = ? AND media_id = ?')
+                ->execute([$screenId, $mediaId]);
+        } else {
+            $rotation = (int) $rotationRaw;
+            if (!in_array($rotation, [0, 90, 180, 270], true)) {
+                json_error(t('api.bad_rotation'), 422);
+            }
+            $pdo->prepare('INSERT INTO screen_media_overrides (screen_id, media_id, rotation)
+                           VALUES (?, ?, ?)
+                           ON DUPLICATE KEY UPDATE rotation = VALUES(rotation)')
+                ->execute([$screenId, $mediaId, $rotation]);
+        }
+        json_out(['ok' => true]);
+
+    // Stato rotazione (automatica + eventuale correzione) di tutti i media
+    // di una galleria PER UNO schermo specifico — usato dal selettore
+    // "schermo di riferimento" nella scheda Contenuti della galleria, per
+    // cambiare schermo senza ricaricare la pagina (vedi anche 'preview').
+    case 'gallery_screen_rotations':
+        require_cap('screen.manage');
+        $galleryId = (int) ($_GET['gallery_id'] ?? 0);
+        $screenId  = (int) ($_GET['screen_id'] ?? 0);
+
+        $stmt = $pdo->prepare('SELECT * FROM screens WHERE id = ?');
+        $stmt->execute([$screenId]);
+        $screen = $stmt->fetch();
+        if ($screen === false) {
+            json_error(t('api.screen_not_found'), 404);
+        }
+        // Ha senso solo se la galleria è davvero assegnata a questo schermo
+        // (l'override si registra per la coppia schermo+media, vedi schema.sql)
+        $stmt = $pdo->prepare('SELECT 1 FROM screen_galleries WHERE screen_id = ? AND gallery_id = ?');
+        $stmt->execute([$screenId, $galleryId]);
+        if ($stmt->fetchColumn() === false) {
+            json_error(t('api.gallery_not_found'), 404);
+        }
+
+        $stmt = $pdo->prepare('SELECT m.id, m.type, m.filename, m.width, m.height,
+                                       smo.rotation AS override_rotation
+                               FROM media m
+                               LEFT JOIN screen_media_overrides smo
+                                      ON smo.screen_id = ? AND smo.media_id = m.id
+                               WHERE m.gallery_id = ? AND m.deleted_at IS NULL');
+        $stmt->execute([$screenId, $galleryId]);
+
+        $items = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $row = media_ensure_dimensions($row);
+            $items[] = [
+                'id'       => (int) $row['id'],
+                'auto'     => effective_item_rotation($row, $screen, null),
+                'override' => $row['override_rotation'] !== null ? (int) $row['override_rotation'] : null,
+            ];
+        }
+        json_out(['items' => $items]);
 
     default:
         json_error(t('api.unknown_action'), 404);

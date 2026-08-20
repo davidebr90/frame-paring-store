@@ -32,6 +32,8 @@ require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/system_media.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/screens.php';
+require_once __DIR__ . '/totp.php';
+require_once __DIR__ . '/mailer.php';
 
 function config(string $key): mixed
 {

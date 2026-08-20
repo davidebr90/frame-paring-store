@@ -297,6 +297,7 @@ function cms_header(string $title, string $active = ''): void
             'items' => [
                 ['key' => 'branding',     'href' => 'branding.php',     'label' => t('nav.branding'), 'cap' => 'settings.manage'],
                 ['key' => 'overlay',      'href' => 'overlay.php',      'label' => t('nav.overlay'),  'cap' => 'settings.manage'],
+                ['key' => 'mail',         'href' => 'mail.php',         'label' => t('nav.mail'),     'cap' => 'settings.manage'],
                 ['key' => 'capabilities', 'href' => 'capabilities.php', 'label' => t('nav.capabilities'),          'cap' => 'settings.manage'],
                 ['key' => 'maintenance',  'href' => 'maintenance.php',  'label' => t('nav.maintenance'),      'cap' => 'settings.manage'],
             ],
@@ -335,7 +336,7 @@ function cms_header(string $title, string $active = ''): void
 <link rel="icon" href="<?= e(branding_favicon_url()) ?>" sizes="any">
 <link rel="icon" type="image/png" href="assets/img/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
-<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/app.css?v=<?= APP_VERSION ?>">
 <style>:root { --accent: <?= branding_accent() ?>; --accent-ink: <?= branding_accent_ink() ?>; --accent-soft: <?= branding_accent() ?>1f; }</style>
 </head>
 <body>
@@ -446,10 +447,10 @@ function cms_footer(): void
     ],
     array_combine(array_keys(FEATURES), array_keys(FEATURES))
 ), JSON_UNESCAPED_UNICODE) ?>;</script>
-<script src="assets/js/sortable.min.js"></script>
-<script src="assets/js/app.js"></script>
-<script src="assets/js/preview.js"></script>
-<script src="assets/js/live-preview.js"></script>
+<script src="assets/js/sortable.min.js?v=<?= APP_VERSION ?>"></script>
+<script src="assets/js/app.js?v=<?= APP_VERSION ?>"></script>
+<script src="assets/js/preview.js?v=<?= APP_VERSION ?>"></script>
+<script src="assets/js/live-preview.js?v=<?= APP_VERSION ?>"></script>
 </body>
 </html><?php
 }

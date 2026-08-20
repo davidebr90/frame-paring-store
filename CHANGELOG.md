@@ -4,6 +4,219 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.3] — 2026-08-18
+
+### Corretto (app Android TV)
+
+- **Nessun ripristino automatico se il sistema uccide il processo**: su un
+  Fire Stick osservato in produzione, un episodio di pressione di memoria
+  ha ucciso 341 processi in un colpo solo — inclusa la nostra app e,
+  poco dopo, perfino il launcher Fire TV stesso. `BootReceiver` copre solo
+  il riavvio del dispositivo: se il device resta acceso ma il processo
+  muore, prima d'ora nulla lo faceva ripartire senza intervento manuale.
+  Aggiunto un controllo periodico (`AlarmManager`, ogni 15 minuti): la
+  sveglia è registrata presso il sistema, non dentro il nostro processo,
+  quindi richiama l'app anche se nel frattempo è morta del tutto.
+- **Lo schermo poteva addormentarsi anche a processo vivo**: l'app non
+  impediva mai la sospensione di Fire TV per inattività del telecomando —
+  un rischio distinto dal crash, che poteva presentarsi anche senza alcun
+  kill di sistema. Aggiunto il flag che tiene lo schermo sempre acceso
+  mentre l'app è in vetrina.
+
+## [1.12.2] — 2026-08-18
+
+### Corretto
+
+- **Caricamento di file pesanti ancora bloccato oltre ~16 MB**: il
+  `.user.ini` della 1.12.1 non bastava su questo hosting (LiteSpeed) —
+  il pannello impone un tetto che solo `php_value` in `.htaccess`
+  riesce a scavalcare (verificato direttamente sul sito). Aggiunto
+  quel blocco, innocuo sugli hosting che non girano su LiteSpeed
+  (`<IfModule Litespeed>` lo salta del tutto quando manca il modulo).
+  Il `.user.ini` resta comunque, per gli hosting dove basta da solo.
+
+### Aggiunto
+
+- **Barra di caricamento con percentuale reale**: la dropzone della
+  galleria mostrava solo "Caricamento…" per l'intera durata, senza modo
+  di distinguere un file grande ancora in corso da uno bloccato. Ora una
+  barra di avanzamento segue byte per byte l'invio di ciascun file; a
+  trasferimento concluso, mentre il server elabora il file (checksum,
+  dimensioni immagine), lo dice esplicitamente invece di lasciare la
+  barra ferma senza spiegazioni.
+
+## [1.12.1] — 2026-08-18
+
+### Corretto
+
+- **Anteprima: rotazione mostrata sbagliata sugli schermi verticali**.
+  Il calcolo della rotazione (vedi 1.11.0) è pensato per un buffer di
+  riproduzione sempre orizzontale, compensato poi dal montaggio
+  fisico del pannello reale — un passaggio che l'anteprima nel browser,
+  non avendo un pannello da ruotare davvero, deve "disfare" per mostrare
+  la forma finale che vede davvero chi guarda. Non lo faceva: applicava
+  la rotazione per intero dentro una cornice già disegnata verticale,
+  mostrando il contenuto piccolo e con bordi neri sproporzionati invece
+  di riempire la cornice come fa davvero la TV. Il valore inviato alla TV
+  non è cambiato: è solo l'anteprima del CMS a calcolare ora la parte di
+  rotazione che le serve davvero.
+- **Caricamento di file oltre ~16 MB non riusciva**: i limiti PHP
+  dell'hosting (`upload_max_filesize`/`post_max_size`) erano più stretti
+  del tetto configurato nell'app (200 MB di default). Aggiunto un
+  `.user.ini` nella cartella del sistema per allinearli: su hosting
+  LiteSpeed/LSAPI o PHP-FPM viene letto entro pochi minuti dal
+  caricamento (fino a 5 minuti, per come funziona la cache di PHP per
+  questo file), senza bisogno di accesso al pannello di controllo.
+
+## [1.12.0] — 2026-08-18
+
+### Aggiunto
+
+- **Anteprima realistica per schermo nella scheda Contenuti**: nella
+  pagina di ogni galleria, l'Anteprima non mostra più uno schermo
+  generico ma un selettore con gli schermi realmente configurati —
+  scegliendone uno, l'anteprima calcola e mostra la galleria esattamente
+  come apparirebbe su quello schermo (rotazione automatica delle foto,
+  sovraimpressione compresa), indipendentemente dal fatto che quella
+  galleria sia già assegnata allo schermo scelto o meno. Se non esiste
+  ancora nessuno schermo configurato, compare un avviso al posto del
+  selettore e l'anteprima resta quella generica di prima.
+- **Correzione manuale della rotazione anche nei singoli contenuti**:
+  nella stessa scheda, scegliendo uno schermo compare in ogni card di
+  contenuto un campo Rotazione (Automatico + 0/90/180/270°) — la stessa
+  correzione per-schermo già disponibile nella pagina di ogni schermo,
+  ma richiamabile direttamente dai contenuti, utile per un intervento
+  rapido "in emergenza" senza uscire dalla pagina. Vale solo per lo
+  schermo scelto: gli altri schermi che condividono la stessa galleria
+  non ne risentono.
+
+### Nota
+
+Nessuna modifica allo schema del database: la funzionalità riusa le
+tabelle `screen_media_overrides` e le colonne `media.width`/`height`
+introdotte nella 1.11.0.
+
+## [1.11.0] — 2026-08-18
+
+### Aggiunto
+
+- **Rotazione delle foto automatica, per schermo**: al caricamento il
+  sistema legge le dimensioni naturali dell'immagine e, in riproduzione,
+  la ruota da sola confrontando il suo orientamento (verticale/
+  orizzontale) con quello dello schermo che la mostra — il lato lungo
+  della foto finisce sul lato lungo dello schermo, e il montaggio
+  fisico del pannello viene compensato insieme, nello stesso calcolo.
+  Non è più un metadato del file: la stessa foto, condivisa fra più
+  schermi con montaggi diversi, appare ruotata correttamente su
+  ciascuno. In *Adattamento contenuti*, nella pagina di ogni schermo,
+  si vede il calcolo automatico e si può correggerlo a mano per un
+  singolo file — la correzione vale solo per quello schermo, gli altri
+  che condividono la stessa galleria non ne risentono. Il controllo di
+  rotazione nella scheda dei singoli file in galleria è stato rimosso:
+  non ha più un doppio significato ambiguo con la nuova logica per
+  schermo. L'adattamento (`contain`/`cover`) resta invece un'impostazione
+  del file, invariato.
+  Vale solo per le foto: i video restano a rotazione manuale come prima
+  (servirebbe leggere le loro dimensioni con `ffprobe`, non garantito su
+  ogni hosting condiviso).
+
+### Aggiornamento
+
+```sql
+ALTER TABLE media
+  ADD COLUMN width INT UNSIGNED NULL AFTER checksum,
+  ADD COLUMN height INT UNSIGNED NULL AFTER width;
+
+CREATE TABLE screen_media_overrides (
+  screen_id INT UNSIGNED NOT NULL,
+  media_id  INT UNSIGNED NOT NULL,
+  rotation  SMALLINT UNSIGNED NOT NULL,
+  PRIMARY KEY (screen_id, media_id),
+  KEY idx_smo_media (media_id),
+  CONSTRAINT fk_smo_screen
+    FOREIGN KEY (screen_id) REFERENCES screens (id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_smo_media
+    FOREIGN KEY (media_id) REFERENCES media (id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+Le foto già caricate prima di questo aggiornamento non hanno ancora
+`width`/`height`: si calcolano da sole, una alla volta, al primo utilizzo
+(nessuna migrazione da lanciare a mano).
+
+## [1.10.0] — 2026-08-11
+
+### Corretto
+
+- **Orientamento e rotazione dello schermo potevano disallinearsi**:
+  `orientation` era una scelta indipendente da `rotation`, quindi uno
+  schermo poteva restare "orizzontale" anche dopo averlo segnato come
+  ruotato di 90°/270°. L'anteprima nel CMS, basata sull'orientamento
+  per decidere la forma del riquadro, mostrava allora i contenuti
+  ruotati tagliati ai bordi invece che nel formato verticale corretto.
+  Ora l'orientamento si calcola sempre da `rotation` (90°/270° →
+  verticale, altrimenti orizzontale) e non è più scelto a parte, né alla
+  creazione né dalle impostazioni dello schermo.
+- **La sovraimpressione non compariva nell'anteprima del CMS**: il
+  simulatore "Anteprima" (schermo e galleria) riproduceva posizione e
+  rotazione dei contenuti ma ignorava completamente logo/data/ora — ora
+  li mostra nella stessa posizione e con la stessa rotazione che
+  applicherà davvero il dispositivo, stessa matematica del banner
+  sull'app TV.
+- **Le miniature delle gallerie non riflettevano la rotazione impostata
+  per i file a 90°/270°**: il ritaglio avveniva nel riquadro orizzontale
+  della card e POI veniva ruotato, invece di essere ritagliato già
+  nell'inquadratura corretta — il risultato sembrava semplicemente non
+  ruotato. Ora il ritaglio avviene nelle dimensioni scambiate, coerenti
+  con come apparirà davvero il file una volta ruotato.
+
+### Aggiornamento
+
+```sql
+UPDATE screens SET orientation = IF(rotation IN (90,270), 'portrait', 'landscape');
+```
+
+## [1.9.0] — 2026-08-11
+
+### Aggiunto
+
+- **Verifica in due passaggi (2FA)**: ogni utente può attivare dal proprio
+  profilo un secondo passaggio al login con un'app authenticator (Google
+  Authenticator, Aegis, 1Password, ecc.), tramite QR o codice manuale.
+  L'amministratore può disattivarla per un altro utente da Utenti → scheda
+  utente; chi ha perso l'accesso al proprio autenticatore può disattivarla
+  da solo con un link a uso singolo inviato alla propria email.
+- **Invio email configurabile**: nuova pagina Sistema → Email. Di norma usa
+  mail() di PHP (funziona da sola su molto hosting condiviso); in
+  alternativa si può configurare un server SMTP esterno, con un pulsante
+  per inviarsi un'email di prova.
+
+### Aggiornamento
+
+```sql
+ALTER TABLE `users`
+  ADD COLUMN `totp_secret` VARCHAR(64) NULL AFTER `deleted_by`,
+  ADD COLUMN `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0 AFTER `totp_secret`,
+  ADD COLUMN `totp_reset_token` CHAR(64) NULL AFTER `totp_enabled`,
+  ADD COLUMN `totp_reset_expires_at` DATETIME NULL AFTER `totp_reset_token`;
+```
+
+## [1.8.0] — 2026-08-11
+
+### Aggiunto
+
+- **Sovraimpressione consapevole del montaggio fisico dello schermo**: ogni
+  schermo ha ora una propria rotazione (0°/90°/180°/270°, impostabile dalla
+  sua pagina nel CMS) che indica di quanto è girato il pannello rispetto al
+  segnale grezzo. Prima la posizione scelta per il banner («in alto a
+  sinistra», ecc.) e l'orientamento di data/ora/logo restavano quelli del
+  buffer non ruotato: su uno schermo montato in verticale, il riquadro
+  finiva sul lato sbagliato e la scritta appariva di traverso. Ora area e
+  contenuto del banner si adattano schermo per schermo, coerenti con come
+  lo vede davvero chi guarda il pannello montato.
+
 ## [1.7.0] — 2026-08-11
 
 Collaudo su Fire TV Stick reale (Fire OS 5, Android 5.1.1 — la generazione

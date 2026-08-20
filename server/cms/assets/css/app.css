@@ -373,6 +373,13 @@ tr:last-child td { border-bottom: 0; }
   letter-spacing: .55em; text-align: center;
   padding: 16px 0 16px .55em !important;
 }
+.tfa-setup { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.tfa-setup > div:first-child {
+  background: #fff; padding: 10px; border-radius: var(--radius); flex: 0 0 auto;
+}
+.tfa-setup-side { flex: 1 1 260px; min-width: 220px; }
+.tfa-setup-side .pin-input { font-size: 1.5rem !important; letter-spacing: .4em; }
+.tfa-setup-side form + form { margin-top: 10px; }
 /* ---------- Media manager ---------- */
 .dropzone {
   border: 2px dashed var(--line); border-radius: var(--radius);
@@ -381,6 +388,14 @@ tr:last-child td { border-bottom: 0; }
 }
 .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
 .dropzone input { display: none; }
+.dz-progress {
+  height: 6px; margin-top: 14px; border-radius: 999px;
+  background: var(--panel-2); overflow: hidden;
+}
+.dz-progress-bar {
+  height: 100%; width: 0%; border-radius: inherit;
+  background: var(--accent); transition: width .15s linear;
+}
 
 .media-grid {
   display: grid; gap: 16px; margin-top: 18px;
@@ -401,9 +416,12 @@ tr:last-child td { border-bottom: 0; }
 .media-thumb:active { cursor: grabbing; }
 .media-thumb img, .media-thumb video {
   width: 100%; height: 100%;
-  transition: transform .25s ease, object-fit 0s;
+  transition: transform .25s ease, object-fit 0s, width .25s ease, height .25s ease;
 }
-/* L'anteprima riflette rotation e fit reali del metadato */
+/* Ruotati di 90°/270°: le dimensioni scambiate (vedi thumbSwapSize() in
+   app.js) sostituiscono il 100%/100% qui sopra con lo stile inline, così
+   il ritaglio (object-fit) avviene nell'ingombro DOPO la rotazione invece
+   che in quello orizzontale del riquadro poi semplicemente girato. */
 .media-thumb[data-fit="contain"] img, .media-thumb[data-fit="contain"] video { object-fit: contain; }
 .media-thumb[data-fit="cover"] img, .media-thumb[data-fit="cover"] video { object-fit: cover; }
 .media-thumb[data-rot="90"] img, .media-thumb[data-rot="90"] video { transform: rotate(90deg); }
@@ -438,6 +456,19 @@ tr:last-child td { border-bottom: 0; }
 }
 .save-dot.saving { background: var(--accent); }
 .save-dot.saved { background: var(--ok); }
+
+/* ---------- Adattamento contenuti (rotazione per schermo) ---------- */
+.cfit-list { display: flex; flex-direction: column; gap: 10px; }
+.cfit-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+}
+.cfit-row .media-thumb { width: 96px; flex: 0 0 96px; }
+.cfit-info { flex: 1; min-width: 0; }
+.cfit-name {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfit-row select[data-screen-media-rotation] { max-width: 220px; }
 
 /* ---------- Liste ordinabili (gallerie su schermo) ---------- */
 .sort-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -613,6 +644,15 @@ tr:last-child td { border-bottom: 0; }
   translate: -50% -50%;
   object-fit: fill;
 }
+.pv-banner {
+  position: absolute; top: 0; left: 0; /* riposizionato in JS, vedi positionBanner() */
+  display: flex; align-items: center;
+  color: #fff; font: 600 15px/1.3 var(--font-ui);
+  white-space: nowrap; pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+}
+.pv-banner-logo { display: none; height: 22px; object-fit: contain; }
+.pv-banner-text { display: block; }
 .pv-bar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px; flex-wrap: wrap;
@@ -917,6 +957,11 @@ a.side-user:hover { color: var(--accent); text-decoration: none; }
 .auth-brand b { color: var(--accent); }
 .auth-sub { text-align: center; color: var(--muted); font-size: .86rem; margin-bottom: 28px; }
 .auth-card .btn { width: 100%; justify-content: center; padding: 12px; margin-top: 6px; }
+.auth-link {
+  display: block; text-align: center; margin-top: 16px;
+  color: var(--muted); font-size: .82rem; text-decoration: none;
+}
+.auth-link:hover { color: var(--ink); text-decoration: underline; }
 
 /* ---------- Copiabile ---------- */
 .copy-row { display: flex; gap: 8px; }

@@ -23,16 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($do === 'settings') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $inches = (int) ($_POST['diagonal_inches'] ?? 0);
-        $orientation = (string) ($_POST['orientation'] ?? 'landscape');
+        $rotation = (int) ($_POST['rotation'] ?? 0);
         if ($name === '' || mb_strlen($name) > 100) {
             flash_set('err', t('sv.err_name'));
         } elseif ($inches < 0 || $inches > 500) {
             flash_set('err', t('snew.err_inches'));
-        } elseif (!in_array($orientation, ['landscape', 'portrait'], true)) {
-            flash_set('err', t('snew.err_orientation'));
+        } elseif (!in_array($rotation, [0, 90, 180, 270], true)) {
+            flash_set('err', t('snew.err_rotation'));
         } else {
-            $pdo->prepare('UPDATE screens SET name = ?, diagonal_inches = ?, orientation = ? WHERE id = ?')
-                ->execute([$name, $inches > 0 ? $inches : null, $orientation, $id]);
+            // L'orientamento non si sceglie più a parte: segue sempre la
+            // rotazione, altrimenti tornano a scollarsi (vedi screens.php)
+            $orientation = screen_orientation_for_rotation($rotation);
+            $pdo->prepare('UPDATE screens SET name = ?, diagonal_inches = ?, orientation = ?, rotation = ? WHERE id = ?')
+                ->execute([$name, $inches > 0 ? $inches : null, $orientation, $rotation, $id]);
             flash_set('ok', t('sv.saved'));
         }
     } elseif ($do === 'revoke') {
@@ -68,6 +71,24 @@ $imageMedia = $pdo->query("SELECT m.id, m.original_name, g.name AS gallery_name
                            WHERE m.type = 'image' AND m.deleted_at IS NULL AND g.deleted_at IS NULL
                            ORDER BY g.name, m.original_name")->fetchAll();
 
+// Adattamento contenuti: tutto ciò che questo schermo mostra tramite le
+// sue gallerie, con la rotazione calcolata e l'eventuale correzione manuale
+$screenMedia = $pdo->prepare("SELECT m.id, m.type, m.original_name, m.width, m.height, m.rotation, m.fit,
+                                     g.name AS gallery_name, smo.rotation AS override_rotation
+                              FROM media m
+                              JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
+                              JOIN galleries g         ON g.id = m.gallery_id
+                              LEFT JOIN screen_media_overrides smo
+                                     ON smo.screen_id = sg.screen_id AND smo.media_id = m.id
+                              WHERE sg.screen_id = ? AND m.deleted_at IS NULL AND g.deleted_at IS NULL
+                              ORDER BY g.name, m.sort_order, m.id");
+$screenMedia->execute([$id]);
+$screenMedia = array_map(function (array $m) use ($screen): array {
+    $m = media_ensure_dimensions($m);
+    $m['auto_rotation'] = effective_item_rotation($m, $screen, null);
+    return $m;
+}, $screenMedia->fetchAll());
+
 cms_header($screen['name'], 'screens');
 ?>
 <div class="main-head">
@@ -99,16 +120,37 @@ cms_header($screen['name'], 'screens');
       <input type="number" id="diagonal_inches" name="diagonal_inches" min="0" max="500"
              placeholder="<?= e(t('snew.inches_ph')) ?>" value="<?= $screen['diagonal_inches'] !== null ? (int) $screen['diagonal_inches'] : '' ?>">
     </div>
-    <div class="field" style="max-width:190px">
-      <label for="orientation"><?= e(t('snew.orientation')) ?></label>
-      <select id="orientation" name="orientation">
-        <option value="landscape"<?= $screen['orientation'] === 'landscape' ? ' selected' : '' ?>><?= e(t('snew.landscape')) ?></option>
-        <option value="portrait"<?= $screen['orientation'] === 'portrait' ? ' selected' : '' ?>><?= e(t('snew.portrait')) ?></option>
+    <div class="field" style="max-width:230px">
+      <label for="rotation"><?= e(t('snew.rotation')) ?></label>
+      <select id="rotation" name="rotation" data-orientation-source>
+        <?php foreach ([0, 90, 180, 270] as $deg): ?>
+        <option value="<?= $deg ?>"<?= (int) $screen['rotation'] === $deg ? ' selected' : '' ?>><?= e(t('snew.rot_' . $deg)) ?></option>
+        <?php endforeach; ?>
       </select>
+    </div>
+    <div class="field" style="max-width:190px">
+      <span class="hint"><?= e(t('snew.orientation_derived')) ?></span>
+      <div class="mono" data-orientation-label>
+        <?= e($screen['orientation'] === 'portrait' ? t('snew.portrait') : t('snew.landscape')) ?>
+      </div>
     </div>
     <button class="btn" type="submit"><?= e(t('common.save')) ?></button>
   </form>
   <p class="hint" style="margin:12px 0 0"><?= e(t('sv.settings_hint')) ?></p>
+  <p class="hint" style="margin:6px 0 0"><?= e(t('snew.rotation_hint')) ?></p>
+  <script>
+    (function () {
+      var select = document.querySelector('[data-orientation-source]');
+      var label = document.querySelector('[data-orientation-label]');
+      if (!select || !label) { return; }
+      var LANDSCAPE = <?= json_encode(t('snew.landscape')) ?>;
+      var PORTRAIT = <?= json_encode(t('snew.portrait')) ?>;
+      select.addEventListener('change', function () {
+        var deg = Number(select.value);
+        label.textContent = (deg === 90 || deg === 270) ? PORTRAIT : LANDSCAPE;
+      });
+    })();
+  </script>
 </div>
 
 <?php if ($screen['status'] === 'pending' && $screen['claim_token'] !== null): ?>
@@ -150,6 +192,49 @@ cms_header($screen['name'], 'screens');
     <p class="hint"><?= t('sv.no_galleries', [
       'link' => '<a href="galleries.php">' . e(t('sv.no_galleries_link')) . '</a>',
     ]) ?></p>
+  <?php endif; ?>
+</div>
+
+<div class="card">
+  <h2><?= e(t('sv.content_fit')) ?></h2>
+  <p class="hint"><?= e(t('sv.content_fit_hint')) ?></p>
+  <?php if (!$screenMedia): ?>
+    <p class="hint"><?= e(t('sv.content_fit_empty')) ?></p>
+  <?php else: ?>
+  <div class="cfit-list" data-screen="<?= (int) $screen['id'] ?>">
+    <?php foreach ($screenMedia as $m):
+        $effective = $m['override_rotation'] !== null ? (int) $m['override_rotation'] : (int) $m['auto_rotation'];
+    ?>
+    <div class="cfit-row" data-id="<?= (int) $m['id'] ?>">
+      <div class="media-thumb" data-rot="<?= $effective ?>" data-fit="<?= e($m['fit']) ?>">
+        <?php if ($m['type'] === 'image'): ?>
+          <img src="media_preview.php?id=<?= (int) $m['id'] ?>" alt="" loading="lazy">
+        <?php else: ?>
+          <video src="media_preview.php?id=<?= (int) $m['id'] ?>" preload="metadata" muted></video>
+        <?php endif; ?>
+      </div>
+      <div class="cfit-info">
+        <div class="cfit-name" title="<?= e($m['original_name']) ?>"><?= e($m['original_name']) ?></div>
+        <div class="hint">
+          <?= e($m['gallery_name']) ?>
+          <?php if ($m['type'] === 'image' && $m['width'] !== null): ?>
+            · <?= e((int) $m['height'] > (int) $m['width'] ? t('sv.photo_portrait') : t('sv.photo_landscape')) ?>
+          <?php endif; ?>
+          · <?= e(t('sv.auto_rotation', ['deg' => (string) $m['auto_rotation']])) ?>
+        </div>
+      </div>
+      <select data-screen-media-rotation data-id="<?= (int) $m['id'] ?>" data-auto="<?= (int) $m['auto_rotation'] ?>">
+        <option value=""<?= $m['override_rotation'] === null ? ' selected' : '' ?>>
+          <?= e(t('sv.rotation_auto_option', ['deg' => (string) $m['auto_rotation']])) ?>
+        </option>
+        <?php foreach ([0, 90, 180, 270] as $deg): ?>
+        <option value="<?= $deg ?>"<?= $m['override_rotation'] !== null && (int) $m['override_rotation'] === $deg ? ' selected' : '' ?>><?= $deg ?>°</option>
+        <?php endforeach; ?>
+      </select>
+      <span class="save-dot" data-save-dot></span>
+    </div>
+    <?php endforeach; ?>
+  </div>
   <?php endif; ?>
 </div>
 

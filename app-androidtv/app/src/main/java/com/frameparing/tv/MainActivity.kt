@@ -117,8 +117,15 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Vetrina in vista fissa: lo screensaver/sospensione di Fire TV
+        // scatta per inattività del telecomando, indipendentemente dal
+        // fatto che l'app stia attivamente disegnando contenuti — senza
+        // questo flag lo schermo si spegne comunque dopo un po', anche a
+        // processo perfettamente vivo
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
         enterImmersiveMode()
+        Watchdog.arm(this)
 
         prefs = Prefs(this)
         sync = SyncEngine(this, prefs)
@@ -701,17 +708,20 @@ class MainActivity : Activity() {
     // ricreerebbe le view e farebbe sfarfallare il riquadro.
     private fun applyBanner(playlist: Playlist) {
         val config = playlist.banner
+        // La rotazione dello schermo entra nella chiave: se cambia da sola
+        // (schermo rimontato, nessun'altra impostazione del banner toccata)
+        // la sovraimpressione deve comunque spostarsi sul lato giusto
         val key = config?.let {
             listOf(
                 it.position, it.size, it.opacity, it.showDate,
-                it.showTime, it.dateFormat, it.logoTag,
+                it.showTime, it.dateFormat, it.logoTag, playlist.screenRotation,
             ).joinToString("|")
         }
         if (key == bannerKey) return
         bannerKey = key
         scope.launch {
             val logo = sync.ensureBannerLogo(config)
-            bannerController.apply(config, logo)
+            bannerController.apply(config, logo, playlist.screenRotation)
             // Logo atteso ma non arrivato (server irraggiungibile, errore
             // temporaneo): il banner intanto mostra data e ora, e la chiave
             // azzerata fa riprovare il download al polling successivo

@@ -53,8 +53,33 @@ non dipende da servizi esterni e non ha canoni.
 
 **App TV**
 - Cache locale dei media: riproduce anche senza rete, scarica solo ciò che cambia
-- Avvio automatico all'accensione del dispositivo
+- Avvio automatico all'accensione del dispositivo, con ripristino automatico
+  se il sistema uccide il processo per pressione di memoria (controllo
+  periodico via `AlarmManager`, indipendente dal processo dell'app)
+- Schermo sempre acceso mentre l'app è in vetrina: non risente dello
+  screensaver/sospensione per inattività del telecomando
 - Impostazioni richiamabili dal telecomando per cambiare server o disassociare
+
+## Piattaforme TV supportate
+
+L'app nativa gira su **Android TV e Fire OS** (qualsiasi Fire TV Stick, box
+Android TV, TV con Google TV integrato): è l'unica piattaforma coperta da
+codice pronto all'uso in questo repository.
+
+**Non supportate nativamente**, per limiti tecnici reali della piattaforma,
+non ancora esplorati o non convenienti rispetto al costo di sviluppo:
+
+| Piattaforma | Perché non (ancora) supportata |
+|---|---|
+| Samsung Tizen (2016+) | Nessuna scorciatoia nota per avviare un video dal solo canale di controllo remoto: richiederebbe un'app nativa sideload via Tizen Studio, sideload da rifare manualmente su ogni TV (nessun aggiornamento centralizzato come per Android TV) |
+| Samsung serie pre-2016 (Orsay) | Piattaforma fuori supporto da un decennio, documentazione scarsa e spesso inaffidabile online |
+| LG webOS | Percorso più promettente in assoluto — il canale di controllo ufficiale può aprire il browser integrato su un URL nostro — ma non ancora implementato/testato su un dispositivo reale |
+| Philips (Android TV) | Stessa piattaforma della Fire Stick: tecnicamente fattibile con lo stesso approccio, semplicemente non ancora impacchettato come percorso di installazione separato |
+| Philips (Saphi / Titan OS) | Nessuna API di controllo o casting pubblicamente documentata trovata: piattaforma sostanzialmente chiusa a integrazioni di terze parti |
+
+Per una vetrina su una di queste TV, oggi la soluzione pratica resta un
+Fire TV Stick o un dispositivo Android TV collegato via HDMI, sul quale
+installare l'app di questo repository.
 
 ## Come funziona
 
@@ -123,9 +148,11 @@ frame-paring-store/
 ## Tecnologie
 
 **Server** — PHP 8 senza framework né librerie esterne, MySQL via PDO con
-prepared statement, front-end in HTML/CSS/JavaScript vanilla. L'unica libreria
-di terze parti è [Sortable.js](https://github.com/SortableJS/Sortable) per il
-drag & drop, inclusa nel repository.
+prepared statement, front-end in HTML/CSS/JavaScript vanilla. Le uniche
+librerie di terze parti, incluse nel repository, sono
+[Sortable.js](https://github.com/SortableJS/Sortable) per il drag & drop e
+[qrcodejs](https://github.com/davidshimjs/qrcodejs) per il QR di attivazione
+della verifica in due passaggi.
 
 **App** — Kotlin nativo per Android TV, tre sole dipendenze:
 [Media3/ExoPlayer](https://github.com/androidx/media) per i video,

@@ -60,6 +60,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([password_hash($new, PASSWORD_DEFAULT), $me['id']]);
             flash_set('ok', t('prof.password_saved'));
         }
+    } elseif ($do === '2fa_start') {
+        // Il segreto vive solo in sessione finché non è confermato da un
+        // primo codice corretto: niente attivazioni a metà salvate su riga,
+        // che lascerebbero l'utente convinto di essere protetto senza esserlo
+        $_SESSION['totp_pending_secret'] = totp_secret_new();
+    } elseif ($do === '2fa_confirm') {
+        $pending = $_SESSION['totp_pending_secret'] ?? null;
+        $code = (string) ($_POST['code'] ?? '');
+        if ($pending === null) {
+            flash_set('err', t('tfa.err_no_pending'));
+        } elseif (!totp_verify($pending, $code)) {
+            flash_set('err', t('tfa.err_code'));
+        } else {
+            $pdo->prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?')
+                ->execute([$pending, $me['id']]);
+            unset($_SESSION['totp_pending_secret']);
+            flash_set('ok', t('tfa.enabled'));
+        }
+    } elseif ($do === '2fa_cancel') {
+        unset($_SESSION['totp_pending_secret']);
+    } elseif ($do === '2fa_disable') {
+        $current = (string) ($_POST['current_password'] ?? '');
+        if (!password_verify($current, $me['password_hash'])) {
+            flash_set('err', t('prof.err_current'));
+        } else {
+            $pdo->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?')
+                ->execute([$me['id']]);
+            flash_set('ok', t('tfa.disabled'));
+        }
     }
     redirect('profile.php');
 }
@@ -129,6 +158,69 @@ cms_header(t('prof.title'), 'profile');
       <button class="btn" type="submit"><?= e(t('prof.change_password')) ?></button>
     </div>
   </form>
+</div>
+
+<div class="card">
+  <h2><?= e(t('tfa.card')) ?></h2>
+  <?php if ($me['totp_enabled']): ?>
+    <p class="hint"><?= e(t('tfa.active_hint')) ?></p>
+    <form method="post" autocomplete="off">
+      <?= csrf_field() ?>
+      <input type="hidden" name="do" value="2fa_disable">
+      <div class="form-row">
+        <div class="field">
+          <label for="tfa_current_password"><?= e(t('prof.current_password')) ?></label>
+          <input type="password" id="tfa_current_password" name="current_password" required>
+        </div>
+        <button class="btn btn-danger" type="submit"><?= e(t('tfa.disable_btn')) ?></button>
+      </div>
+    </form>
+  <?php elseif (isset($_SESSION['totp_pending_secret'])):
+    $pendingSecret = $_SESSION['totp_pending_secret'];
+    $provisioningUri = totp_provisioning_uri($pendingSecret, $me['username'], branding('brand_name'));
+    $grouped = trim(chunk_split($pendingSecret, 4, ' '));
+  ?>
+    <p class="hint"><?= e(t('tfa.setup_hint')) ?></p>
+    <div class="tfa-setup">
+      <div id="tfa-qr" data-uri="<?= e($provisioningUri) ?>"></div>
+      <div class="tfa-setup-side">
+        <p class="hint"><?= e(t('tfa.setup_manual')) ?></p>
+        <p class="mono"><?= e($grouped) ?></p>
+        <form method="post">
+          <?= csrf_field() ?>
+          <input type="hidden" name="do" value="2fa_confirm">
+          <div class="field">
+            <label for="tfa_code"><?= e(t('tfa.code_label')) ?></label>
+            <input type="text" id="tfa_code" name="code" class="pin-input" inputmode="numeric"
+                   autocomplete="one-time-code" placeholder="000000" maxlength="6" required>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit"><?= e(t('tfa.confirm_btn')) ?></button>
+          </div>
+        </form>
+        <form method="post">
+          <?= csrf_field() ?>
+          <input type="hidden" name="do" value="2fa_cancel">
+          <button class="btn btn-sm" type="submit"><?= e(t('common.cancel')) ?></button>
+        </form>
+      </div>
+    </div>
+    <script src="assets/js/qrcode.min.js"></script>
+    <script>
+      new QRCode(document.getElementById('tfa-qr'), {
+        text: document.getElementById('tfa-qr').dataset.uri,
+        width: 180,
+        height: 180,
+      });
+    </script>
+  <?php else: ?>
+    <p class="hint"><?= e(t('tfa.disabled_hint')) ?></p>
+    <form method="post">
+      <?= csrf_field() ?>
+      <input type="hidden" name="do" value="2fa_start">
+      <button class="btn btn-primary" type="submit"><?= e(t('tfa.enable_btn')) ?></button>
+    </form>
+  <?php endif; ?>
 </div>
 
 <div class="card">

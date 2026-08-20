@@ -46,6 +46,9 @@ function current_user(): ?array
 const LOGIN_OK = 0;
 const LOGIN_BAD = 1;
 const LOGIN_LOCKED = 2;
+// Password corretta, ma l'account ha la verifica in due passaggi: manca
+// ancora il codice prima di potersi dire davvero autenticati
+const LOGIN_NEED_2FA = 3;
 
 // Dopo quanti errori scatta il blocco, e per quanto
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -90,7 +93,7 @@ function attempt_login(string $username, string $password): int
         return LOGIN_LOCKED;
     }
 
-    $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1 AND deleted_at IS NULL');
+    $stmt = db()->prepare('SELECT id, password_hash, totp_enabled FROM users WHERE username = ? AND is_active = 1 AND deleted_at IS NULL');
     $stmt->execute([$username]);
     $row = $stmt->fetch();
 
@@ -101,12 +104,56 @@ function attempt_login(string $username, string $password): int
         return login_locked($username) ? LOGIN_LOCKED : LOGIN_BAD;
     }
 
+    if ((int) $row['totp_enabled'] === 1) {
+        // La password da sola non basta: il blocco anti forza bruta resta
+        // attivo (login_attempts non si azzera) finché non arriva anche il
+        // codice giusto in attempt_totp(), e la sessione non ha ancora
+        // user_id — un browser fermo su questa pagina non è "dentro"
+        $_SESSION['pending_2fa_user_id'] = (int) $row['id'];
+        $_SESSION['pending_2fa_username'] = $username;
+        return LOGIN_NEED_2FA;
+    }
+
     db()->prepare('DELETE FROM login_attempts WHERE attempt_key = ?')
         ->execute([login_attempt_key($username)]);
 
     // Il token CSRF nato prima del login non deve sopravvivere all'elevazione
     // di privilegio: si rigenera insieme all'ID di sessione
     unset($_SESSION['csrf']);
+    session_regenerate_id(true);
+    $_SESSION['user_id'] = (int) $row['id'];
+    db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')
+        ->execute([$row['id']]);
+    return LOGIN_OK;
+}
+
+// Secondo passo del login quando l'account ha la verifica in due passaggi
+// attiva. Stessa struttura di attempt_login(), stesso blocco anti forza
+// bruta (la chiave è la stessa username+IP: la password da sola già
+// consumava un tentativo se sbagliata, il codice sbagliato ne consuma un
+// altro — un attaccante con la password rubata non ha un canale a parte).
+function attempt_totp(string $username, string $code): int
+{
+    if (login_locked($username)) {
+        return LOGIN_LOCKED;
+    }
+
+    $id = $_SESSION['pending_2fa_user_id'] ?? null;
+    $stmt = db()->prepare('SELECT id, totp_secret FROM users
+                           WHERE id = ? AND username = ? AND is_active = 1 AND deleted_at IS NULL AND totp_enabled = 1');
+    $stmt->execute([$id, $username]);
+    $row = $stmt->fetch();
+
+    if ($row === false || !totp_verify((string) $row['totp_secret'], $code)) {
+        login_record_failure($username);
+        usleep(random_int(300000, 800000));
+        return login_locked($username) ? LOGIN_LOCKED : LOGIN_BAD;
+    }
+
+    db()->prepare('DELETE FROM login_attempts WHERE attempt_key = ?')
+        ->execute([login_attempt_key($username)]);
+
+    unset($_SESSION['csrf'], $_SESSION['pending_2fa_user_id'], $_SESSION['pending_2fa_username']);
     session_regenerate_id(true);
     $_SESSION['user_id'] = (int) $row['id'];
     db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')
