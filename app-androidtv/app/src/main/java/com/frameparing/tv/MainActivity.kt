@@ -126,6 +126,7 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         enterImmersiveMode()
         Watchdog.arm(this)
+        requestNotificationPermissionIfNeeded()
 
         prefs = Prefs(this)
         sync = SyncEngine(this, prefs)
@@ -169,6 +170,20 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshAutostartPanel()
+    }
+
+    // Copre sia il crash vero (processo morto: il flag riparte da false al
+    // prossimo avvio) sia il caso più subdolo in cui il processo è vivo ma
+    // qualcos'altro è passato sopra (screensaver di sistema, Home) — in
+    // entrambi i casi WatchdogReceiver deve sapere che serve un ripristino.
+    override fun onStart() {
+        super.onStart()
+        isForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isForeground = false
     }
 
     // ---------- impostazioni richiamabili dal telecomando ----------
@@ -382,6 +397,19 @@ class MainActivity : Activity() {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
     }
 
+    // Serve alla notifica a schermo intero del Watchdog (vedi WatchdogReceiver):
+    // da Android 13 in poi va concesso a runtime. Best-effort: se l'utente
+    // lo nega si va comunque avanti, il watchdog userà solo le altre reti
+    // di sicurezza. Sui Fire Stick attuali, sotto la API 33, non fa nulla.
+    private fun requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+        }
+    }
+
     // ---------- pairing PIN / QR ----------
 
     private fun showPairingPanel() {
@@ -561,13 +589,20 @@ class MainActivity : Activity() {
     // Oltre questa deriva si corregge la posizione; sotto, si lascia stare:
     // l'elapsed del server ha la precisione del secondo e un ri-allineamento
     // continuo produrrebbe solo scatti visibili senza guadagno reale
-    private companion object {
-        const val SYNC_TOLERANCE_MS = 3_500L
+    companion object {
+        private const val SYNC_TOLERANCE_MS = 3_500L
         // Durante lo sforamento di un video la fine del file si ri-aggancia
         // da sola: il riallineamento a strappo interverrebbe a metà scena.
         // Oltre questa soglia però il video è considerato bloccato e la
         // rete di sicurezza torna a valere.
-        const val VIDEO_OVERRUN_GRACE_MS = 15_000L
+        private const val VIDEO_OVERRUN_GRACE_MS = 15_000L
+
+        // Letto da WatchdogReceiver per capire se serve davvero un
+        // ripristino: true solo mentre l'Activity è visibile (onStart..
+        // onStop), false anche appena dopo un cold start — esattamente lo
+        // stato in cui il watchdog deve intervenire.
+        @Volatile var isForeground = false
+            private set
     }
 
     private fun applyOverride(override: Override?) {

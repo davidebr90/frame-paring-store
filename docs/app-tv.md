@@ -191,6 +191,33 @@ Lo spazio occupato corrisponde sempre ai contenuti attualmente assegnati a quell
 schermo. Un carosello tipico (10-20 file con qualche video full HD) sta in
 100-500 MB, ampiamente entro la capacità di un Fire Stick.
 
+## Sonno e screensaver della Fire Stick
+
+L'app tiene sempre acceso lo schermo mentre è in primo piano
+(`FLAG_KEEP_SCREEN_ON`), ma questo non basta da solo: Fire OS ha due timer
+di sistema indipendenti dal contenuto sullo schermo, attivi di default,
+basati solo sull'assenza di pressioni sul telecomando — *Impostazioni →
+Display e audio → Screensaver* e *Impostazioni → Preferenze → Sleep*. Il
+secondo può arrivare a uno standby vero, che sposta il fuoco lontano
+dall'app; da lì il watchdog la riporta in vista entro 15 minuti (vedi
+sotto), ma è comunque meglio evitare che scatti: su ogni Fire Stick per
+vetrina, imposta entrambi al valore più alto disponibile (idealmente
+*Never* per lo Sleep) subito dopo il primo pairing.
+
+## Ripristino automatico
+
+Se il sistema termina il processo dell'app (pressione di memoria) o
+qualcos'altro prende il fuoco sopra di essa senza ucciderla (screensaver,
+Home), un controllo periodico ogni 15 minuti (`AlarmManager`, indipendente
+dal processo dell'app) la riporta in primo piano da sola — una notifica a
+schermo intero è l'unico canale che Android garantisce anche a un processo
+appena resuscitato per l'occasione, esattamente come per una sveglia o una
+chiamata in arrivo. Nel frattempo lo schermo può restare sulla Home della
+Fire Stick fino a 15 minuti: è previsto, non serve intervenire a mano.
+Se lo schermo risulta "Offline" nel CMS più a lungo di così, il ripristino
+automatico non sta funzionando: vale la pena controllare il registro
+dell'app (`adb logcat -v time FPS:* AndroidRuntime:E *:S`) sul posto.
+
 ## Risoluzione dei problemi
 
 **"Server non raggiungibile, riprovo…"** — indirizzo sbagliato o TV senza

@@ -14,6 +14,10 @@
 
 package com.frameparing.tv
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,27 +27,92 @@ import android.os.PowerManager
 // nel frattempo il processo dell'app era morto: il sistema lo fa ripartire
 // solo per eseguire questo onReceive().
 //
-// MainActivity è singleTask: se è già in primo piano, riaprirla non fa
-// nulla di visibile — nessun restart, nessuna interruzione della
-// riproduzione (arriva solo una onNewIntent ignorata). È quindi sicuro
-// chiamarla incondizionatamente, senza prima verificare se serva davvero.
+// STORIA DI QUESTO FILE: la prima versione (1.12.3) chiamava direttamente
+// context.startActivity() dopo aver svegliato lo schermo. Funzionava nei
+// test manuali, ma in produzione — dopo un vero kill di sistema, con
+// l'app quindi assente dal CMS ("Offline") — non si è mai vista risalire
+// da sola: serviva riaprirla a mano o riavviare la Fire Stick. Motivo:
+// da Android 10 in poi (Fire OS 8+) il sistema blocca in silenzio, senza
+// eccezione né log, l'avvio di un'Activity da un BroadcastReceiver in
+// background — a meno che l'app non rientri in una delle eccezioni
+// documentate (finestra già visibile, overlay già mostrato, ecc.), nessuna
+// delle quali vale per un processo appena resuscitato apposta per
+// ricevere questa sveglia. La notifica a schermo intero (setFullScreenIntent)
+// è il canale che Android riserva esplicitamente a questo caso d'uso
+// (sveglie, chiamate in arrivo): è garantita anche da un processo così.
 //
-// Il risveglio esplicito dello schermo serve per un motivo distinto dal
-// FLAG_KEEP_SCREEN_ON di MainActivity: quel flag impedisce alla TV di
-// addormentarsi mentre l'app è viva, ma se il dispositivo è GIÀ addormentato
-// (osservato: mWakefulness=Asleep dopo il kill di sistema di ieri) il solo
-// startActivity() non lo risveglia — serve un segnale esplicito.
+// MainActivity è singleTask: riaprirla quando è già in primo piano non fa
+// nulla di visibile — nessun restart, nessuna interruzione della
+// riproduzione (arriva solo una onNewIntent ignorata). MainActivity.isForeground
+// evita comunque di sparare una notifica quando non serve.
 class WatchdogReceiver : BroadcastReceiver() {
+
+    private companion object {
+        const val REQUEST_CODE = 1002
+        const val NOTIFICATION_ID = 1
+        const val CHANNEL_ID = "watchdog"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
+        if (MainActivity.isForeground) return // già in vista: nulla da ripristinare
+
+        // Canale principale: garantito dal sistema anche da un processo
+        // appena resuscitato in background (vedi commento sopra)
+        try {
+            notifyFullScreen(context)
+        } catch (e: Exception) {
+            android.util.Log.w("FPS", "WatchdogReceiver: notifica a schermo intero fallita", e)
+        }
+
+        // Reti di sicurezza aggiuntive, innocue se il canale sopra ha già
+        // fatto il suo lavoro: il risveglio esplicito dello schermo serve
+        // per un motivo distinto da FLAG_KEEP_SCREEN_ON di MainActivity —
+        // quel flag impedisce alla TV di addormentarsi mentre l'app è viva,
+        // ma se il dispositivo è GIÀ addormentato il solo avvio dell'Activity
+        // non lo risveglia da solo su tutti i firmware osservati
         try {
             wakeScreen(context)
+        } catch (e: Exception) {
+            android.util.Log.w("FPS", "WatchdogReceiver: risveglio schermo fallito", e)
+        }
+        // Tentativo diretto, ereditato dalla 1.12.3: bloccato sulla maggior
+        // parte dei firmware per il motivo sopra, ma innocuo se lo è e
+        // immediato nei rari casi in cui un'eccezione del sistema si applica
+        try {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (e: Exception) {
-            android.util.Log.w("FPS", "WatchdogReceiver: ripristino fallito", e)
+            android.util.Log.w("FPS", "WatchdogReceiver: avvio diretto fallito", e)
         }
+    }
+
+    private fun notifyFullScreen(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, context.getString(R.string.app_name), NotificationManager.IMPORTANCE_HIGH)
+            )
+        }
+        val activityIntent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val pendingIntent = PendingIntent.getActivity(
+            context, REQUEST_CODE, activityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(R.string.watchdog_notification_text))
+            .setFullScreenIntent(pendingIntent, true)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            // Stessa categoria delle sveglie/chiamate: è quella che il
+            // sistema riconosce come legittima per un lancio a schermo intero
+            .setCategory(Notification.CATEGORY_CALL)
+            .build()
+        nm.notify(NOTIFICATION_ID, notification)
     }
 
     @Suppress("DEPRECATION") // SCREEN_BRIGHT_WAKE_LOCK è deprecato a favore dei

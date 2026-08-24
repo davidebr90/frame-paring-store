@@ -4,6 +4,32 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.4] — 2026-08-23
+
+### Corretto (app Android TV)
+
+- **Il watchdog della 1.12.3 non risollevava davvero l'app dopo un kill di
+  sistema**: osservato in produzione — lo schermo risultava "Offline" nel
+  CMS e restava sulla Home della Fire Stick finché non si riapriva l'app a
+  mano o si riavviava il dispositivo, nonostante l'`AlarmManager` ogni 15
+  minuti fosse regolarmente in esecuzione. Causa: da Android 10 in poi il
+  sistema blocca **in silenzio**, senza eccezione né log, un
+  `Activity.startActivity()` lanciato da un `BroadcastReceiver` in
+  background — la sveglia dell'`AlarmManager` risuscitava il processo solo
+  per eseguire una chiamata che il sistema scartava immediatamente.
+  Sostituito con una notifica a schermo intero (`setFullScreenIntent`),
+  l'unico canale che Android garantisce anche a un processo appena
+  resuscitato per l'occasione: è lo stesso meccanismo usato da sveglie e
+  chiamate in arrivo. Il tentativo diretto della 1.12.3 resta come rete di
+  sicurezza aggiuntiva, innocuo se bloccato.
+- **Il watchdog interveniva alla cieca anche quando l'app era già in primo
+  piano**: non c'era modo di distinguere un vero ripristino necessario da
+  un risveglio di routine. `MainActivity` ora espone se è effettivamente
+  visibile (`onStart`/`onStop`); il watchdog lo controlla prima di agire —
+  la stessa logica copre anche il caso, distinto dal crash, in cui il
+  processo resta vivo ma qualcos'altro della Fire Stick (screensaver di
+  sistema, Home) è passato sopra all'app senza ucciderla.
+
 ## [1.12.3] — 2026-08-18
 
 ### Corretto (app Android TV)

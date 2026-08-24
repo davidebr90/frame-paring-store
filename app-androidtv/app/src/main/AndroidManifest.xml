@@ -6,6 +6,14 @@
     <!-- Watchdog: risveglio esplicito dello schermo dopo un kill di sistema
          (vedi WatchdogReceiver) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Watchdog: da Android 10 in poi il sistema blocca in silenzio un
+         Activity.startActivity() lanciato da un BroadcastReceiver in
+         background (nessun'eccezione, nessun log — semplicemente non
+         succede nulla). Una notifica a schermo intero è l'unico canale che
+         il sistema garantisce anche da un processo appena resuscitato
+         dall'AlarmManager, vedi WatchdogReceiver -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Da Android 10 il sistema blocca le activity avviate dal background:
          senza questa dichiarazione l'app non comparirebbe nemmeno nella
          schermata "Mostra sopra altre app" e l'avvio al boot fallirebbe -->
