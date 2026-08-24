@@ -4,6 +4,27 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.5] — 2026-08-24
+
+### Corretto (app Android TV)
+
+- **Il watchdog della 1.12.4 crashava all'avvio su Fire OS 5 (Android 5.1,
+  API 22)**: osservato in produzione sullo schermo reale — un Fire TV
+  Stick di prima generazione — via `adb logcat`. `NotificationChannel` e
+  `NotificationManager.getNotificationChannel()`, usati dalla notifica a
+  schermo intero introdotta in 1.12.4, sono API di Android 8.0 (26):
+  su un framework che non le ha proprio, la chiamata lancia un
+  `NoSuchMethodError`. Essendo un `Error` e non un'`Exception`, il
+  `catch (e: Exception)` della 1.12.4 non lo intercettava: il processo
+  appena resuscitato dal watchdog moriva di nuovo all'istante, ogni 15
+  minuti, impedendo qualunque ripristino automatico — peggio della 1.12.3,
+  dove almeno il tentativo diretto (inutile su Android 10+, ma
+  funzionante sotto) restava in piedi. Corretto guardando `Build.VERSION.SDK_INT
+  >= 26` prima di tentare la notifica, e allargando tutti i `catch` del
+  watchdog da `Exception` a `Throwable`: un meccanismo di sicurezza non
+  deve mai poter diventare lui stesso la causa del guasto, qualunque
+  imprevisto capiti su qualunque firmware.
+
 ## [1.12.4] — 2026-08-23
 
 ### Corretto (app Android TV)

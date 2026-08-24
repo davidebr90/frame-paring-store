@@ -21,6 +21,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.PowerManager
 
 // Consegnata da AlarmManager (vedi Watchdog.arm) ogni 15 minuti, anche se
@@ -56,12 +57,21 @@ class WatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (MainActivity.isForeground) return // già in vista: nulla da ripristinare
 
-        // Canale principale: garantito dal sistema anche da un processo
-        // appena resuscitato in background (vedi commento sopra)
-        try {
-            notifyFullScreen(context)
-        } catch (e: Exception) {
-            android.util.Log.w("FPS", "WatchdogReceiver: notifica a schermo intero fallita", e)
+        // Canale principale, ma solo dove esiste davvero: NotificationChannel
+        // è un'API di Android 8.0 (26) — su un Fire Stick di prima
+        // generazione (Fire OS 5, API 22, ancora in produzione su questo
+        // progetto) il metodo non esiste proprio nel framework. Chiamarlo
+        // senza guardia manda un NoSuchMethodError (un Error, non
+        // un'Exception: catturato qui sotto solo perché ora si intercetta
+        // Throwable) che uccideva l'intero processo appena resuscitato —
+        // trasformando il watchdog stesso nella causa del mancato
+        // ripristino, osservato in produzione il 24/08/2026.
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                notifyFullScreen(context)
+            } catch (e: Throwable) {
+                android.util.Log.w("FPS", "WatchdogReceiver: notifica a schermo intero fallita", e)
+            }
         }
 
         // Reti di sicurezza aggiuntive, innocue se il canale sopra ha già
@@ -72,18 +82,18 @@ class WatchdogReceiver : BroadcastReceiver() {
         // non lo risveglia da solo su tutti i firmware osservati
         try {
             wakeScreen(context)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.w("FPS", "WatchdogReceiver: risveglio schermo fallito", e)
         }
-        // Tentativo diretto, ereditato dalla 1.12.3: bloccato sulla maggior
-        // parte dei firmware per il motivo sopra, ma innocuo se lo è e
-        // immediato nei rari casi in cui un'eccezione del sistema si applica
+        // Tentativo diretto: sui firmware sotto Android 10 (come questo
+        // Fire Stick di prima generazione) è la via che funziona davvero,
+        // non solo un fallback — vedi nota sopra
         try {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.w("FPS", "WatchdogReceiver: avvio diretto fallito", e)
         }
     }
