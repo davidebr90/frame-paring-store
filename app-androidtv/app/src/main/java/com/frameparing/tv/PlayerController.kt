@@ -349,8 +349,30 @@ class PlayerController(
             val child = container.getChildAt(i)
             if (child !== currentView) container.removeView(child)
         }
+        // Ogni ExoPlayer pooled tiene viva una TextureView con la propria
+        // catena di buffer GPU (~25 MB l'una, osservato: su un Fire Stick di
+        // prima generazione, 6 buffer ION da 1920×1080×4 byte spiegavano da
+        // soli la metà della memoria del processo — vedi CHANGELOG). Il
+        // secondo player serve DAVVERO vivo insieme al primo solo per il
+        // crossfade di un video che ne sostituisce un altro: in ogni altro
+        // caso (foto→foto, foto→video, video→foto) tenerlo pronto "per
+        // scorta" costa memoria senza motivo. Si rilascia quindi qui, non
+        // solo lo si ferma — pooledPlayer() lo ricrea al bisogno, con un
+        // costo di qualche decina di ms al prossimo video, non prima.
+        val nextIsVideo = item.type == "video"
+        val outgoingIsVideo = currentItem?.type == "video"
+        val needsBothPlayersAlive = nextIsVideo && outgoingIsVideo
         players.forEachIndexed { i, p ->
-            if (i != currentSlot) p?.stop()
+            if (i != currentSlot) {
+                if (needsBothPlayersAlive) {
+                    p?.stop()
+                } else if (p != null) {
+                    playerListeners[i]?.let { p.removeListener(it) }
+                    playerListeners[i] = null
+                    p.release()
+                    players[i] = null
+                }
+            }
         }
 
         val file = sync.localFile(item)

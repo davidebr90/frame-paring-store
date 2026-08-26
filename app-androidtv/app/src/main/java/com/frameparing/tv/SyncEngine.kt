@@ -40,7 +40,7 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             ApiClient.downloadTo(url, token, file)
             file
         } catch (e: Exception) {
-            android.util.Log.w("FPS", "Download del logo del banner fallito", e)
+            FileLogger.w("Download del logo del banner fallito", e)
             null
         }
     }
@@ -66,7 +66,7 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             ApiClient.downloadMedia(item, token, file)
             file
         } catch (e: Exception) {
-            android.util.Log.w("FPS", "Download della diretta fallito", e)
+            FileLogger.w("Download della diretta fallito", e)
             null
         }
     }
@@ -87,7 +87,7 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
                 ApiClient.downloadMedia(item, token, file)
                 pronti.add(item)
             } catch (e: Exception) {
-                android.util.Log.w("FPS", "Diretta: file ${item.id} non scaricato", e)
+                FileLogger.w("Diretta: file ${item.id} non scaricato", e)
             }
         }
         return pronti
@@ -106,7 +106,7 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
             retriever.setDataSource(file.path)
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
         } catch (e: Exception) {
-            android.util.Log.w("FPS", "Durata di ${item.id} non leggibile", e)
+            FileLogger.w("Durata di ${item.id} non leggibile", e)
             null
         } finally {
             runCatching { retriever.release() }
@@ -143,7 +143,7 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
         val playlist = try {
             Playlist.parse(raw)
         } catch (e: Exception) {
-            android.util.Log.w("FPS", "Playlist malformata, la ignoro", e)
+            FileLogger.w("Playlist malformata, la ignoro", e)
             return null
         }
         prefs.pollInterval = playlist.pollInterval
@@ -163,9 +163,9 @@ class SyncEngine(context: Context, private val prefs: Prefs) {
                 // Un 401/403 sul singolo media NON è una revoca (può venire da
                 // WAF/CDN/hotlink protection): la revoca la dichiara solo la
                 // playlist, che è appena passata. Qui si salta e si ritenta.
-                android.util.Log.w("FPS", "Download ${item.id} fallito: ${e.message}")
+                FileLogger.w("Download ${item.id} fallito: ${e.message}")
             } catch (e: Exception) {
-                android.util.Log.w("FPS", "Download ${item.id} errore IO", e)
+                FileLogger.w("Download ${item.id} errore IO", e)
             }
         }
 

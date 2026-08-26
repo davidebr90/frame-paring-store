@@ -4,6 +4,61 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.7] — 2026-08-26
+
+### Corretto (app Android TV)
+
+- **Causa reale (non solo il sintomo) dei kill di sistema ricorrenti**,
+  trovata sullo schermo di produzione grazie al log persistente della
+  1.12.6: `dumpsys meminfo` mostrava 89 MB di "Dalvik Other" e 53 MB di
+  "GL mtrack" a fronte di un heap Java di soli 3 MB — la memoria non era
+  nei bitmap né negli oggetti Kotlin, ma nei buffer GPU. Confermato nel
+  log del kernel al momento del kill: sei allocazioni ION da 8.294.400
+  byte l'una — esattamente un framebuffer 1920×1080 RGBA — combaciano con
+  le due `TextureView` dei due `ExoPlayer` pooled di `PlayerController`,
+  tenute vive per l'intera sessione una volta creata la prima (serve per
+  il crossfade video→video), **anche quando la playlist corrente è fatta
+  solo di foto**. Su un device con solo ~32 MB di soglia riservata anche
+  per le app in primo piano (Fire Stick di prima generazione, 895 MB di
+  RAM totale condivisi con ~175 processi Amazon), ~50 MB di GPU tenuti "di
+  scorta" erano il fattore decisivo che ci faceva scegliere come vittima
+  del `lowmemorykiller` a ogni picco di pressione di memoria — anche a
+  `adj 0`, il livello di priorità più protetto.
+  Corretto rilasciando (non solo fermando) il player non in uso a ogni
+  cambio contenuto, tranne nell'unico caso che ha davvero bisogno di
+  entrambi vivi insieme: un crossfade da video a un altro video. In ogni
+  altra sequenza (foto→foto, foto→video, video→foto) resta al massimo un
+  solo `ExoPlayer` allocato. Costo: qualche decina di ms in più per
+  ricreare il player al video successivo dopo una sequenza di sole foto —
+  trascurabile rispetto ai ~50 MB liberati stabilmente.
+
+## [1.12.6] — 2026-08-26
+
+### Aggiunto (app Android TV)
+
+- **Log persistente su file**, a complemento di logcat: `logcat` si azzera a
+  ogni riavvio e su un device con poca RAM (osservato: un Fire Stick di
+  prima generazione, 1 GB totale) va facilmente in overflow prima che
+  qualcuno si colleghi con adb per controllare cosa è successo. Ora ogni
+  riga già loggata (`FileLogger`, stessa firma di prima) finisce anche in
+  `<dati app>/files/logs/fps.log`, a rotazione (due file da 256 KB, il
+  vecchio viene sovrascritto) così un device acceso per settimane non
+  riempie lo storage. Recuperabile con `adb pull` anche molto dopo
+  l'evento, non solo nel momento esatto in cui si è collegati dal vivo.
+- **Gestore globale dei crash non gestiti** (`FPSApplication`): scrive nel
+  log persistente qualunque eccezione non catturata di qualunque thread,
+  compresi gli `Error` (non solo le `Exception`) — esattamente la
+  categoria del `NoSuchMethodError` che ha causato il bug della 1.12.4 sul
+  watchdog. Il processo continua comunque a morire come da comportamento
+  standard di Android dopo un crash non gestito: qui si registra soltanto,
+  non si nasconde né si impedisce il crash.
+- Il watchdog ora logga ogni singola sveglia ricevuta dall'`AlarmManager`
+  (anche quando non deve fare nulla perché l'app è già in primo piano) e
+  `MainActivity` logga ogni transizione `onStart`/`onStop`: senza questo,
+  un sintomo come "l'app torna spesso alla Home" non aveva alcun modo di
+  essere collegato a un orario preciso quando osservato a posteriori dal
+  log invece che dal vivo.
+
 ## [1.12.5] — 2026-08-24
 
 ### Corretto (app Android TV)

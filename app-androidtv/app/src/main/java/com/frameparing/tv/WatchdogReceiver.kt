@@ -55,6 +55,11 @@ class WatchdogReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Sempre loggato, anche quando non c'è nulla da fare: è il solo modo
+        // di distinguere "il watchdog non si sveglia mai" da "si sveglia
+        // regolarmente e giustamente non fa nulla" quando si legge il log
+        // molto dopo il fatto, senza aver potuto osservare dal vivo.
+        FileLogger.i("WatchdogReceiver: sveglia ricevuta, isForeground=${MainActivity.isForeground}")
         if (MainActivity.isForeground) return // già in vista: nulla da ripristinare
 
         // Canale principale, ma solo dove esiste davvero: NotificationChannel
@@ -70,7 +75,7 @@ class WatchdogReceiver : BroadcastReceiver() {
             try {
                 notifyFullScreen(context)
             } catch (e: Throwable) {
-                android.util.Log.w("FPS", "WatchdogReceiver: notifica a schermo intero fallita", e)
+                FileLogger.w("WatchdogReceiver: notifica a schermo intero fallita", e)
             }
         }
 
@@ -83,7 +88,7 @@ class WatchdogReceiver : BroadcastReceiver() {
         try {
             wakeScreen(context)
         } catch (e: Throwable) {
-            android.util.Log.w("FPS", "WatchdogReceiver: risveglio schermo fallito", e)
+            FileLogger.w("WatchdogReceiver: risveglio schermo fallito", e)
         }
         // Tentativo diretto: sui firmware sotto Android 10 (come questo
         // Fire Stick di prima generazione) è la via che funziona davvero,
@@ -94,7 +99,7 @@ class WatchdogReceiver : BroadcastReceiver() {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (e: Throwable) {
-            android.util.Log.w("FPS", "WatchdogReceiver: avvio diretto fallito", e)
+            FileLogger.w("WatchdogReceiver: avvio diretto fallito", e)
         }
     }
 

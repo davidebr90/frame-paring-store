@@ -95,7 +95,7 @@ class KioskOverlay(private val activity: Activity) {
         } catch (e: Exception) {
             // Alcuni Fire OS negano comunque la finestra pur con il permesso
             // concesso: si continua nella finestra normale senza insistere
-            android.util.Log.w("FPS", "Finestra sopra-tutto non disponibile, resto nella finestra normale", e)
+            FileLogger.w("Finestra sopra-tutto non disponibile, resto nella finestra normale", e)
             null
         }
     }

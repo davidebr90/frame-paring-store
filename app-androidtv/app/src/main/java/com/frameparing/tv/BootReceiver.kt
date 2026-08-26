@@ -11,17 +11,17 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        android.util.Log.i("FPS", "BootReceiver: ricevuto ${intent.action}")
+        FileLogger.i("BootReceiver: ricevuto ${intent.action}")
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         try {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            android.util.Log.i("FPS", "BootReceiver: startActivity inviata")
+            FileLogger.i("BootReceiver: startActivity inviata")
         } catch (e: Exception) {
             // Se il sistema lo impedisce, l'app resta avviabile dal launcher
-            android.util.Log.w("FPS", "BootReceiver: startActivity fallita", e)
+            FileLogger.w("BootReceiver: startActivity fallita", e)
         }
     }
 }

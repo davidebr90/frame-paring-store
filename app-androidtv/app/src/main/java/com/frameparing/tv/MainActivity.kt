@@ -179,11 +179,17 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         isForeground = true
+        FileLogger.i("onStart: in primo piano")
     }
 
     override fun onStop() {
         super.onStop()
         isForeground = false
+        // Fondamentale per capire A POSTERIORI se a coprire l'app sia stato
+        // qualcosa di esterno (screensaver, Home) o un nostro riavvio: senza
+        // questa riga nel log, "in Home molto spesso" resta un sintomo senza
+        // un orario preciso a cui agganciarlo.
+        FileLogger.i("onStop: qualcosa è passato sopra (Home, screensaver, o un riavvio nostro)")
     }
 
     // ---------- impostazioni richiamabili dal telecomando ----------
@@ -448,7 +454,7 @@ class MainActivity : Activity() {
                 val start = try {
                     ApiClient.pairStart(base)
                 } catch (e: Exception) {
-                    android.util.Log.w("FPS", "Diagnostica pairing verso $base fallita", e)
+                    FileLogger.w("Diagnostica pairing verso $base fallita", e)
                     pairStatus.setText(R.string.status_error)
                     delay(5_000)
                     continue
@@ -627,7 +633,7 @@ class MainActivity : Activity() {
             if (activeOverrideId == null) {
                 return // non c'era nulla in onda: nulla da riprendere
             }
-            android.util.Log.i("FPS", "Diretta terminata: riprende la programmazione")
+            FileLogger.i("Diretta terminata: riprende la programmazione")
             activeOverrideId = null
             activeOverrideSig = null
             isIdle = false
@@ -643,7 +649,7 @@ class MainActivity : Activity() {
             return
         }
 
-        android.util.Log.i("FPS", "Diretta ${override.id} «${override.name}» da ${override.elapsedSeconds}s")
+        FileLogger.i("Diretta ${override.id} «${override.name}» da ${override.elapsedSeconds}s")
         activeOverrideId = override.id
 
         // Galleria intera: si riusa il player della playlist, con transizioni
@@ -660,7 +666,7 @@ class MainActivity : Activity() {
                 if (pieno == null) {
                     activeOverrideId = null
                     activeOverrideSig = null
-                    android.util.Log.w("FPS", "Diretta ${override.id}: elenco non recuperato, riprovo")
+                    FileLogger.w("Diretta ${override.id}: elenco non recuperato, riprovo")
                     return@launch
                 }
                 val pronti = sync.ensureOverrideItems(pieno)
@@ -669,14 +675,14 @@ class MainActivity : Activity() {
                     // lasciare lo schermo fermo per tutta la diretta
                     activeOverrideId = null
                     activeOverrideSig = null
-                    android.util.Log.w("FPS", "Diretta ${override.id}: nessun file pronto, riprovo")
+                    FileLogger.w("Diretta ${override.id}: nessun file pronto, riprovo")
                     return@launch
                 }
                 if (pronti.size != pieno.items.size) {
                     // Con file mancanti la timeline di questo schermo non può
                     // coincidere con quella degli altri: si riproduce comunque,
                     // ma va detto nei log
-                    android.util.Log.w("FPS", "Diretta ${override.id}: ${pieno.items.size - pronti.size} file mancanti, sincronia parziale")
+                    FileLogger.w("Diretta ${override.id}: ${pieno.items.size - pronti.size} file mancanti, sincronia parziale")
                 }
                 hidePlayerStatus()
                 // La timeline: ogni immagine occupa transizione+esposizione
@@ -717,7 +723,7 @@ class MainActivity : Activity() {
                 // senza questo lo schermo resterebbe fermo sulla sincronizzazione
                 activeOverrideId = null
                 showPlayerStatus(R.string.status_syncing)
-                android.util.Log.w("FPS", "Diretta ${override.id}: file non disponibile, riprovo")
+                FileLogger.w("Diretta ${override.id}: file non disponibile, riprovo")
                 return@launch
             }
             hidePlayerStatus()
@@ -733,7 +739,7 @@ class MainActivity : Activity() {
         if (!LocaleHelper.isSupported(wanted) || wanted == prefs.language) {
             return
         }
-        android.util.Log.i("FPS", "Lingua dell'interfaccia: $wanted")
+        FileLogger.i("Lingua dell'interfaccia: $wanted")
         prefs.language = wanted
         recreate()
     }
@@ -784,11 +790,11 @@ class MainActivity : Activity() {
         // così tanto da sembrare bloccato
         if (deriva <= SYNC_TOLERANCE_MS) return
         if (playerController.inVideoOverrun() && deriva <= VIDEO_OVERRUN_GRACE_MS) {
-            android.util.Log.i("FPS", "Diretta: video oltre il suo slot di ${deriva} ms, attendo la sua fine")
+            FileLogger.i("Diretta: video oltre il suo slot di ${deriva} ms, attendo la sua fine")
             return
         }
         run {
-            android.util.Log.i("FPS", "Diretta: deriva di ${deriva} ms, riallineo")
+            FileLogger.i("Diretta: deriva di ${deriva} ms, riallineo")
             playerController.playSynced(
                 Playlist(
                     version = "live-realign",
@@ -822,8 +828,7 @@ class MainActivity : Activity() {
         // guardare quando uno schermo "non si accende" a un certo orario
         if (active != wasActive) {
             wasActive = active
-            android.util.Log.i(
-                "FPS",
+            FileLogger.i(
                 "Programmazione: " + (if (active) "in fascia" else "fuori fascia") +
                     " (giorno " + isoDayOfWeekNow() + ", " + minuteOfDayNow() / 60 + ":" +
                     "%02d".format(minuteOfDayNow() % 60) + ", fasce " + playlist.scheduleBands.size + ")"
@@ -921,7 +926,7 @@ class MainActivity : Activity() {
                 } catch (e: Exception) {
                     // Qualunque imprevisto NON deve uccidere il loop di sync:
                     // uno schermo in vetrina deve riprovare, sempre
-                    android.util.Log.w("FPS", "Errore imprevisto nel sync, riprovo", e)
+                    FileLogger.w("Errore imprevisto nel sync, riprovo", e)
                 }
                 // Attesa interrompibile: il ciclo di stato può svegliarla
                 // appena si accorge che il CMS ha cambiato qualcosa
