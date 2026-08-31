@@ -38,4 +38,8 @@ db()->prepare('UPDATE screens
                 WHERE id = ?')
     ->execute([$reason, $screen['id']]);
 
+// Oltre al contatore riassuntivo, una riga datata nella cronologia: il
+// contatore dice quanti, la cronologia dice quando.
+screen_event_add((int) $screen['id'], 'restart', $reason);
+
 json_out(['ok' => true]);

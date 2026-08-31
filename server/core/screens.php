@@ -196,6 +196,8 @@ function confirm_pairing(string $code, string $method): ?int
         return null;
     }
 
+    screen_event_add((int) $id, 'paired', $method);
+
     return (int) $id;
 }
 

@@ -277,4 +277,6 @@ function overlay_save_for_screen(int $screenId, ?array $values): void
 {
     db()->prepare('UPDATE screens SET overlay_json = ? WHERE id = ?')
         ->execute([$values === null ? null : json_encode(overlay_normalize($values)), $screenId]);
+
+    screen_event_add($screenId, 'config', 'overlay');
 }

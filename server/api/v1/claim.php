@@ -40,9 +40,12 @@ if ($stmt->rowCount() !== 1) {
     json_error('URL di configurazione non valida o già utilizzata', 404);
 }
 
-$stmt = db()->prepare('SELECT name FROM screens WHERE auth_token = ?');
+$stmt = db()->prepare('SELECT id, name FROM screens WHERE auth_token = ?');
 $stmt->execute([token_hash($authToken)]);
-$name = (string) $stmt->fetchColumn();
+$row  = $stmt->fetch();
+$name = (string) $row['name'];
+
+screen_event_add((int) $row['id'], 'paired', 'manual');
 
 json_out([
     'status'        => 'paired',

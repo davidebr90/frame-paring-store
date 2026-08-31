@@ -267,6 +267,21 @@ CREATE TABLE `live_override_screens` (
   CONSTRAINT `fk_los_screen` FOREIGN KEY (`screen_id`) REFERENCES `screens` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `screen_events` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `screen_id`   INT UNSIGNED NOT NULL,
+  `type`        VARCHAR(20)  NOT NULL,            -- 'registered' | 'paired' | 'restart'
+                                                  -- 'gap' | 'config' | 'revoked'.
+                                                  -- VARCHAR e non ENUM di proposito: aggiungere
+                                                  -- un tipo non deve richiedere una migrazione
+  `reason`      VARCHAR(20)  NULL,                -- solo 'restart': 'boot' | 'watchdog' | 'manual'
+  `gap_seconds` INT UNSIGNED NULL,                -- solo 'gap': durata dell'assenza, in secondi
+  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP, -- per 'gap' e' l'istante del RIENTRO
+  PRIMARY KEY (`id`),
+  KEY `idx_se_screen` (`screen_id`, `id`),
+  CONSTRAINT `fk_se_screen` FOREIGN KEY (`screen_id`) REFERENCES `screens` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- FK differita: screens.idle_media_id -> media.id (vedi nota sopra)
 ALTER TABLE `screens`
   ADD CONSTRAINT `fk_screens_idle_media`

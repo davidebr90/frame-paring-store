@@ -1144,6 +1144,10 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 /* Azioni accanto al badge nell'intestazione di una scheda */
 .head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
+/* Salto alla cronologia: sotto gli 840px .side diventa una barra fissa in
+   alto, e senza questo margine il titolo della sezione finirebbe sotto */
+#cronologia { scroll-margin-top: 64px; }
+
 /* ---------- Pagina a compito singolo ----------
    Titolo e riquadro al centro dello spazio disponibile, su entrambi gli
    assi. flex:1 fa occupare allo spazio centrale tutta l'altezza libera,

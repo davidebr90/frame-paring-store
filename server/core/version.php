@@ -3,6 +3,6 @@ declare(strict_types=1);
 
 // Versione del sistema. Va tenuta allineata a quella dell'app TV
 // (app-androidtv/app/build.gradle.kts -> versionName).
-const APP_VERSION = '1.12.8';
-const APP_RELEASE_DATE = '2026-08-26';
+const APP_VERSION = '1.12.11';
+const APP_RELEASE_DATE = '2026-08-31';
 const APP_NAME_DEFAULT = 'Frame Paring Store';

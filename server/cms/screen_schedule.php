@@ -29,6 +29,8 @@ function schedule_apply(int $screenId, array $bands, string $idleMode, ?int $idl
             $idleMode === 'image' ? $idleMediaId : null,
             $screenId,
         ]);
+
+    screen_event_add($screenId, 'config', 'schedule');
 }
 
 // Immagine di cortesia valida? Altrimenti si ricade sul nero, senza

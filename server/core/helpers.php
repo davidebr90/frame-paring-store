@@ -132,6 +132,14 @@ function require_device(): array
         json_error('Schermo revocato', 403);
     }
 
+    // Assenza rientrata: il server non ha modo di accorgersi nel momento in
+    // cui una TV sparisce (nessuno lo avvisa), se ne accorge quando quella
+    // torna a farsi viva. Va calcolata prima di riscrivere last_seen_at.
+    $gap = screen_gap_seconds($screen);
+    if ($gap !== null) {
+        screen_event_add((int) $screen['id'], 'gap', null, $gap);
+    }
+
     db()->prepare('UPDATE screens SET last_seen_at = NOW() WHERE id = ?')
         ->execute([$screen['id']]);
 

@@ -36,11 +36,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $orientation = screen_orientation_for_rotation($rotation);
             $pdo->prepare('UPDATE screens SET name = ?, diagonal_inches = ?, orientation = ?, rotation = ? WHERE id = ?')
                 ->execute([$name, $inches > 0 ? $inches : null, $orientation, $rotation, $id]);
+            screen_event_add($id, 'config', 'settings');
             flash_set('ok', t('sv.saved'));
         }
     } elseif ($do === 'revoke') {
         // Il token resta in tabella ma lo status blocca ogni richiesta
         $pdo->prepare("UPDATE screens SET status = 'revoked' WHERE id = ?")->execute([$id]);
+        screen_event_add($id, 'revoked');
         flash_set('ok', t('sv.revoked'));
     } elseif ($do === 'delete') {
         $pdo->prepare('DELETE FROM screens WHERE id = ?')->execute([$id]);
@@ -89,6 +91,10 @@ $screenMedia = array_map(function (array $m) use ($screen): array {
     return $m;
 }, $screenMedia->fetchAll());
 
+// Cronologia: il contatore in testata dice QUANTI riavvii, questa dice
+// quando sono successi e quanto e' rimasto irraggiungibile lo schermo.
+$events = screen_events($id);
+
 cms_header($screen['name'], 'screens');
 ?>
 <div class="main-head">
@@ -110,6 +116,9 @@ cms_header($screen['name'], 'screens');
   <div class="head-actions">
     <a class="btn" href="screen_schedule.php?id=<?= (int) $screen['id'] ?>"><?= e(t('sch.title')) ?></a>
     <a class="btn" href="screen_overlay.php?id=<?= (int) $screen['id'] ?>"><?= e(t('ovp.title')) ?></a>
+    <?php // La cronologia e' in fondo alla pagina: senza un salto dall'alto
+          // non la trova nessuno (verificato sul campo) ?>
+    <a class="btn" href="#cronologia"><?= e(t('sv.history')) ?></a>
     <?= screen_badge($screen, $onlineWindow) ?>
   </div>
 </div>
@@ -259,6 +268,39 @@ cms_header($screen['name'], 'screens');
   <div class="form-actions">
     <a class="btn btn-primary" href="screen_schedule.php?id=<?= (int) $screen['id'] ?>"><?= e(t('sch.configure')) ?></a>
   </div>
+</div>
+
+<div class="card" id="cronologia">
+  <h2><?= e(t('sv.history')) ?></h2>
+  <?php if (!$events): ?>
+    <p class="hint" style="margin:0"><?= e(t('sv.history_empty')) ?></p>
+  <?php else: ?>
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th><?= e(t('sv.history_when')) ?></th>
+      <th><?= e(t('sv.history_event')) ?></th>
+      <th><?= e(t('sv.history_detail')) ?></th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($events as $ev): ?>
+      <tr>
+        <td class="hint">
+          <span class="cell-when">
+            <span><?= date('d/m/Y', strtotime($ev['created_at'])) ?></span>
+            <span><?= date('H:i', strtotime($ev['created_at'])) ?></span>
+          </span>
+        </td>
+        <?php [$evClass, $evLabel, $evDetail] = screen_event_view($ev); ?>
+        <td><span class="badge <?= $evClass ?>"><?= e($evLabel) ?></span></td>
+        <td><?= e($evDetail) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+  <p class="hint"><?= e(t('sv.history_hint', ['days' => SCREEN_EVENTS_RETENTION_DAYS])) ?></p>
+  <?php endif; ?>
 </div>
 
 <div class="card">

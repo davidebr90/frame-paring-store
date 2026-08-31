@@ -222,6 +222,7 @@ switch ($action) {
             $stmt->execute([$screenId, $position, (int) $galleryId]);
         }
         $pdo->commit();
+        screen_event_add($screenId, 'config', 'galleries');
         json_out(['ok' => true]);
 
     // Correzione manuale della rotazione automatica, valida SOLO per

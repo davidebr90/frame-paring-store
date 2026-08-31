@@ -4,6 +4,124 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.11] — 2026-08-31
+
+### Corretto (CMS)
+
+- La cronologia esisteva ma **non la trovava nessuno**: sta in fondo alla
+  scheda dello schermo, dopo cinque riquadri di configurazione, e chi apriva
+  la pagina vedeva solo la riga di riepilogo in testata. Aggiunto un
+  pulsante *Cronologia* accanto a *Programmazione* e *Sovraimpressione*,
+  che salta direttamente alla sezione.
+- L'ancora ha `scroll-margin-top`: sotto gli 840px la barra laterale
+  diventa una barra fissa in alto, e senza compensazione il titolo della
+  sezione ci sarebbe finito sotto.
+- Versione incrementata anche per il solo foglio di stile: `app.css` è
+  servito con `?v=APP_VERSION`, quindi senza bump i browser che avevano
+  già aperto la pagina avrebbero continuato a usare il CSS vecchio.
+
+## [1.12.10] — 2026-08-31
+
+### Aggiunto
+
+La cronologia della 1.12.9 registrava due soli tipi di evento, entrambi
+rari: appena installata restava una pagina vuota, che è esattamente
+l'obiezione dell'utente al primo sguardo. Ora elenca tutto ciò che accade a
+uno schermo, e parte già popolata con lo storico ricostruibile.
+
+- **Nuovi tipi di evento**, tutti registrati lato server senza alcuna
+  modifica all'app: `registered` (schermo creato), `paired` (associato, col
+  metodo usato), `config` (modifiche dal CMS: nome e impostazioni del
+  pannello, gallerie assegnate, programmazione oraria, sovraimpressione),
+  `revoked` (accesso revocato). Si aggiungono a `restart` e `gap`.
+- **Backfill dello storico** al momento della migrazione: la data di
+  creazione di ogni schermo e l'ultimo riavvio noto (`last_restart_at`)
+  diventano righe della cronologia, così la pagina non nasce vuota.
+- Gli agganci per le modifiche di programmazione e sovraimpressione stanno
+  **dentro** `schedule_apply()` e `overlay_save_for_screen()`, non nelle
+  pagine che le chiamano: un domani una nuova pagina che salvi la
+  programmazione risulta tracciata senza doverselo ricordare.
+- `screen_event_view()` concentra in un punto solo come si mostra ogni
+  tipo di evento (badge, etichetta, dettaglio): aggiungerne uno tocca una
+  funzione, non il template. Un tipo sconosciuto — evento scritto da una
+  versione più recente di quella che disegna la pagina — viene mostrato
+  grezzo invece di sparire.
+- La colonna `type` passa da `ENUM` a `VARCHAR(20)`: aggiungere un tipo di
+  evento non deve richiedere una migrazione del database.
+
+### Aggiornamento
+
+```sql
+ALTER TABLE `screen_events` MODIFY `type` VARCHAR(20) NOT NULL;
+
+-- Backfill dello storico gia noto (idempotente)
+INSERT INTO `screen_events` (screen_id, type, created_at)
+SELECT s.id, 'registered', s.created_at FROM `screens` s
+ WHERE NOT EXISTS (SELECT 1 FROM `screen_events` e
+                    WHERE e.screen_id = s.id AND e.type = 'registered');
+
+INSERT INTO `screen_events` (screen_id, type, reason, created_at)
+SELECT s.id, 'restart', s.last_restart_reason, s.last_restart_at FROM `screens` s
+ WHERE s.last_restart_at IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM `screen_events` e
+                    WHERE e.screen_id = s.id AND e.type = 'restart'
+                      AND e.created_at = s.last_restart_at);
+```
+
+## [1.12.9] — 2026-08-31
+
+### Aggiunto
+
+Cronologia degli eventi per schermo nel CMS. Il contatore della 1.12.8 dice
+*quanti* riavvii, ma non *quando*: per rispondere a "a che ora è successo e
+quanto è durato" restava obbligatorio collegarsi via adb e leggere il log su
+file del dispositivo. Richiesta dell'utente subito dopo il primo deploy della
+1.12.8 in produzione.
+
+- **Database**: nuova tabella `screen_events`, una riga per evento invece
+  delle sole tre colonne riassuntive su `screens`, che restano.
+- **Server**: `POST api/v1/restart.php` registra anche l'evento datato oltre
+  a incrementare il contatore. `require_device()` rileva le **assenze**: se
+  l'ultimo contatto è più vecchio della finestra di online, al primo rientro
+  registra un evento `gap` con la durata dell'assenza. È l'unico momento in
+  cui il server può accorgersene — nessuno lo avvisa quando una TV sparisce,
+  se ne accorge quando ricompare. La soglia è la stessa formula del badge
+  del CMS (`poll_interval × 2 + 30`), così il log elenca esattamente le
+  assenze che il badge ha mostrato come "Offline".
+- **CMS**: nuova scheda *Cronologia* nella pagina dello schermo, con orario,
+  tipo di evento e dettaglio (motivo del riavvio, oppure durata
+  dell'assenza). Mostra gli ultimi 60 eventi.
+- La telemetria non può far fallire la riproduzione: scrittura e lettura
+  degli eventi inghiottono qualunque `Throwable` e si limitano a lasciarne
+  traccia nel log di PHP. Se i file vengono caricati prima della migrazione
+  del database, le API continuano a funzionare e la scheda schermo resta
+  consultabile, semplicemente senza cronologia.
+- Ritenzione 90 giorni, con potatura opportunistica a ogni inserimento (gli
+  inserimenti sono rari: solo riavvii e assenze vere, mai il polling).
+
+### Nota sull'app
+
+**Nessuna modifica al codice dell'app**: la 1.12.9 è interamente lato
+server. Il numero di versione dell'app è stato comunque allineato come
+vuole la convenzione del progetto, ma **non serve ricompilare né
+reinstallare l'APK** — la 1.12.8 già installata invia tutto ciò che serve.
+
+### Aggiornamento
+
+```sql
+CREATE TABLE `screen_events` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `screen_id`   INT UNSIGNED NOT NULL,
+  `type`        ENUM('restart','gap') NOT NULL,
+  `reason`      VARCHAR(20)  NULL,
+  `gap_seconds` INT UNSIGNED NULL,
+  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_se_screen` (`screen_id`, `id`),
+  CONSTRAINT `fk_se_screen` FOREIGN KEY (`screen_id`) REFERENCES `screens` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
 ## [1.12.8] — 2026-08-26
 
 ### Aggiunto
