@@ -596,6 +596,10 @@ class MainActivity : Activity() {
     // l'elapsed del server ha la precisione del secondo e un ri-allineamento
     // continuo produrrebbe solo scatti visibili senza guadagno reale
     companion object {
+        // Letto da BootReceiver/WatchdogReceiver per dire al CMS PERCHÉ
+        // questo avvio è successo (vedi reportRestart più sotto)
+        const val EXTRA_RESTART_REASON = "restart_reason"
+
         private const val SYNC_TOLERANCE_MS = 3_500L
         // Durante lo sforamento di un video la fine del file si ri-aggancia
         // da sola: il riallineamento a strappo interverrebbe a metà scena.
@@ -846,11 +850,28 @@ class MainActivity : Activity() {
         return active
     }
 
+    // Segnala al CMS che l'app è appena partita, e perché — letto
+    // dall'extra sull'Intent che ci ha lanciati (BootReceiver/WatchdogReceiver
+    // lo impostano, un avvio manuale no). Chiamata solo da enterPlayerMode(),
+    // che gira solo su un vero onCreate (mai su onNewIntent, non sovrascritto):
+    // così conta avvii reali del processo, non ogni volta che l'Activity
+    // torna in vista.
+    private fun reportRestart() {
+        val base = prefs.baseUrl ?: return
+        val token = prefs.authToken ?: return
+        val reason = intent.getStringExtra(EXTRA_RESTART_REASON) ?: "manual"
+        scope.launch {
+            runCatching { ApiClient.reportRestart(base, token, reason) }
+                .onFailure { FileLogger.w("Segnalazione riavvio (motivo=$reason) fallita", it) }
+        }
+    }
+
     private fun enterPlayerMode() {
         pairingJob?.cancel()
         pairingPanel.visibility = View.GONE
         showPlayerAutostartHint()
         enterKioskOverlay()
+        reportRestart()
 
         startStateLoop()
 

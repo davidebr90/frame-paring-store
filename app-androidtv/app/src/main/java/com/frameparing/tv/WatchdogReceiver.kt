@@ -97,6 +97,7 @@ class WatchdogReceiver : BroadcastReceiver() {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(MainActivity.EXTRA_RESTART_REASON, "watchdog")
             )
         } catch (e: Throwable) {
             FileLogger.w("WatchdogReceiver: avvio diretto fallito", e)
@@ -112,6 +113,7 @@ class WatchdogReceiver : BroadcastReceiver() {
         }
         val activityIntent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(MainActivity.EXTRA_RESTART_REASON, "watchdog")
         val pendingIntent = PendingIntent.getActivity(
             context, REQUEST_CODE, activityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

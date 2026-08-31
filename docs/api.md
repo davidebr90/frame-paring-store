@@ -204,6 +204,33 @@ Note sui campi:
 - Quando `override` torna `null` la diretta è finita: il client riprende la
   propria programmazione, che non è mai stata modificata.
 
+## Telemetria
+
+### `POST restart.php`
+
+Segnala un avvio vero del processo app (non il polling): incrementa
+`restart_count` sullo schermo e registra motivo e orario, visibili nella
+scheda dello schermo nel CMS. Va chiamato **una sola volta per avvio**, da
+`MainActivity.onCreate()` — mai nel ciclo di `state.php`/`playlist.php`.
+
+**Richiesta**
+```json
+{ "reason": "watchdog" }
+```
+
+`reason` vale `boot` (il dispositivo si è acceso), `watchdog` (il processo
+era morto, il watchdog l'ha risollevato da solo) o `manual` (avvio normale,
+incluso un intervento manuale) — qualunque altro valore o l'assenza del
+campo ricade su `manual`.
+
+**Risposta**
+```json
+{ "ok": true }
+```
+
+Un fallimento di questa chiamata non deve mai bloccare la riproduzione: è
+solo telemetria, il client la considera "fire and forget".
+
 ## Codici di errore
 
 | Codice | Significato |

@@ -17,6 +17,7 @@ class BootReceiver : BroadcastReceiver() {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(MainActivity.EXTRA_RESTART_REASON, "boot")
             )
             FileLogger.i("BootReceiver: startActivity inviata")
         } catch (e: Exception) {

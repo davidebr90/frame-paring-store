@@ -121,6 +121,24 @@ object ApiClient {
         )
     }
 
+    // Segnala un avvio vero del processo (una volta per avvio, mai nel
+    // polling di state.php): il CMS lo mostra come contatore, utile per
+    // capire se e quanto il watchdog sta intervenendo senza doversi
+    // collegare al dispositivo per saperlo. Chi chiama deve trattarla
+    // "fire and forget": un fallimento qui non deve mai bloccare la
+    // riproduzione, è solo telemetria.
+    suspend fun reportRestart(baseUrl: String, token: String, reason: String): Unit =
+        withContext(Dispatchers.IO) {
+            val conn = open("$baseUrl/api/v1/restart.php")
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.outputStream.use { it.write(JSONObject().put("reason", reason).toString().toByteArray()) }
+            conn.readResponse()
+            Unit
+        }
+
     // Scarica su file temporaneo, verifica lo sha1 e solo allora rinomina:
     // in cache non entra mai un file corrotto o troncato.
     suspend fun downloadMedia(item: PlaylistItem, token: String, dest: File): Unit =

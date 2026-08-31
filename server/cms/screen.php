@@ -97,6 +97,14 @@ cms_header($screen['name'], 'screens');
     <div class="sub">
       <?= $screen['device_info'] ? e($screen['device_info']) . ' · ' : '' ?>
       <?= e(t('sv.registered_on', ['date' => date('d/m/Y', strtotime($screen['created_at']))])) ?>
+      <?php if ((int) $screen['restart_count'] > 0 && $screen['last_restart_at']): ?>
+        · <?= e(t('sv.restarts', [
+            'count'  => (int) $screen['restart_count'],
+            'reason' => t('sv.restart_reason.' . ($screen['last_restart_reason'] ?? 'manual')),
+            'date'   => date('d/m/Y', strtotime($screen['last_restart_at'])),
+            'time'   => date('H:i', strtotime($screen['last_restart_at'])),
+        ])) ?>
+      <?php endif; ?>
     </div>
   </div>
   <div class="head-actions">

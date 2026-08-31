@@ -107,6 +107,9 @@ CREATE TABLE `screens` (
   `idle_media_id`    INT UNSIGNED  NULL,               -- immagine di cortesia (un media immagine)
   `overlay_json`     TEXT          NULL,               -- banner personalizzato di questo schermo; NULL = eredita le impostazioni generali
   `last_seen_at`     DATETIME      NULL,               -- ultimo polling ricevuto
+  `restart_count`    INT UNSIGNED  NOT NULL DEFAULT 0, -- avvii veri del processo app (non il polling)
+  `last_restart_reason` VARCHAR(20) NULL,               -- 'boot' | 'watchdog' | 'manual'
+  `last_restart_at`  DATETIME      NULL,
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_screens_pairing_code` (`pairing_code`),

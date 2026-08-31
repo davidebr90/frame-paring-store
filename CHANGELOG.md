@@ -4,6 +4,36 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.12.8] — 2026-08-26
+
+### Aggiunto
+
+Contatore riavvii per schermo, visibile nel CMS senza doversi collegare via
+adb al dispositivo — proposta dell'utente dopo una giornata passata a
+diagnosticare da remoto quanto sia scomodo non avere questo dato a colpo
+d'occhio.
+
+- **App**: segnala al server un avvio vero del processo (mai nel polling
+  continuo di `state.php`), specificando il motivo — `boot` (acceso il
+  dispositivo), `watchdog` (il processo era morto, risollevato da solo) o
+  `manual` (avvio normale, incluso un intervento manuale). `BootReceiver` e
+  `WatchdogReceiver` marcano l'Intent di lancio con il motivo; un avvio a
+  icona non lo marca, e ricade su `manual`. Fire-and-forget: un fallimento
+  di questa chiamata non blocca mai la riproduzione, è solo telemetria.
+- **Server**: nuovo endpoint `POST api/v1/restart.php`, nuove colonne
+  `restart_count`, `last_restart_reason`, `last_restart_at` su `screens`.
+- **CMS**: la scheda di ogni schermo mostra "N riavvii · ultimo <motivo> il
+  <data> alle <ora>" accanto a data di registrazione e info dispositivo.
+
+### Aggiornamento
+
+```sql
+ALTER TABLE `screens`
+  ADD COLUMN `restart_count` INT UNSIGNED NOT NULL DEFAULT 0,
+  ADD COLUMN `last_restart_reason` VARCHAR(20) NULL,
+  ADD COLUMN `last_restart_at` DATETIME NULL;
+```
+
 ## [1.12.7] — 2026-08-26
 
 ### Corretto (app Android TV)
