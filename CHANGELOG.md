@@ -4,6 +4,72 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.13.0] — 2026-09-21
+
+Riduzione della memoria richiesta al dispositivo, da entrambi i lati. Il
+problema di fondo, misurato: i file in vetrina su questo impianto sono
+foto da fotocamera (fino a 4544×6816 pixel, 20 MB), e una foto entra in
+memoria DECOMPRESSA, quattro byte per pixel. Trentuno megapixel fanno 124
+MB su un Fire TV Stick di prima generazione che ne concede una trentina
+all'app in primo piano. Nessun accorgimento sul solo lato app poteva
+colmare quel divario: andava tolto alla fonte.
+
+### Aggiunto (server)
+
+- **Copia ridotta per la riproduzione** (`core/renditions.php`): al
+  caricamento, ogni immagine più grande di un pannello full HD riceve una
+  copia scalata a 1920 pixel di lato, ed è QUELLA che i dispositivi
+  scaricano. L'originale resta intatto su disco e continua a servire il
+  CMS (anteprime, e un domani schermi più grandi). Misurato su una foto
+  3072×4608 come quelle in produzione: da 6,5 MB a 1,0 MB di file, e da
+  54 MB a 9 MB di memoria sul dispositivo.
+- **Recupero dei file già caricati**: i media precedenti alla 1.13.0
+  ricevono la copia la prima volta che una playlist li nomina, al massimo
+  due per richiesta — una galleria intera di foto pesanti da convertire in
+  un colpo solo supererebbe il tempo massimo di esecuzione dell'hosting e
+  lascerebbe lo schermo senza risposta. Nel giro di qualche polling sono
+  pronte tutte, senza migrazione da lanciare a mano.
+- La copia si scarta da sola quando non serve: immagine già a misura,
+  guadagno di peso irrisorio a parità di pixel, formato che GD non sa
+  trattare, memoria PHP insufficiente per decomprimere l'originale. In
+  ognuno di quei casi si continua a servire l'originale esattamente come
+  nella 1.12.11.
+- **Il metro è la memoria, non il peso del file.** Una grafica piatta
+  3000×2000 può pesare 44 KB su disco e ventiquattro MEGABYTE una volta
+  decompressa: ridurla conviene anche se il file, ricompresso e con i
+  bordi sfumati dal ridimensionamento, finisce per pesare qualche KB in
+  più. La regola sul peso vale solo a parità di pixel, dove l'unico
+  guadagno possibile è la ricompressione.
+
+### Note
+
+- **Geometria identica, di proposito**: la copia è solo scalata, mai
+  riorientata. Applicare l'orientamento EXIF avrebbe cambiato come appare
+  una foto già in vetrina e falsato le rotazioni manuali eventualmente
+  impostate per compensarla a mano. La riduzione di peso non sposta un
+  solo pixel di ciò che si vede.
+- **L'app riscarica i file una volta sola**, dopo l'aggiornamento: il
+  nome in cache è il checksum del contenuto, e il contenuto consegnato ora
+  è la copia. Il traffico di quel giro è comunque inferiore a quello che
+  si risparmia già dal secondo.
+- Il download continua a funzionare anche con un'app precedente la
+  1.13.0: le URL portano il checksum della variante attesa, e senza quel
+  parametro il server consegna l'originale, che è ciò che le playlist
+  vecchie dichiarano.
+- Se i file del server vengono caricati prima di eseguire la migrazione
+  SQL, il sistema se ne accorge e serve gli originali invece di far
+  fallire le query: gli schermi non si fermano in quella finestra.
+
+### Aggiornamento
+
+```sql
+ALTER TABLE `media`
+  ADD COLUMN `rendition_filename` VARCHAR(255)    NULL AFTER `checksum`,
+  ADD COLUMN `rendition_filesize` BIGINT UNSIGNED NULL AFTER `rendition_filename`,
+  ADD COLUMN `rendition_checksum` CHAR(40)        NULL AFTER `rendition_filesize`,
+  ADD COLUMN `rendition_at`       DATETIME        NULL AFTER `rendition_checksum`;
+```
+
 ## [1.12.11] — 2026-08-31
 
 ### Corretto (CMS)

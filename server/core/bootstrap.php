@@ -31,6 +31,7 @@ require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/system_media.php';
 require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/renditions.php'; // copie ridotte servite ai dispositivi
 require_once __DIR__ . '/screens.php';
 require_once __DIR__ . '/events.php';
 require_once __DIR__ . '/totp.php';

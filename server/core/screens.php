@@ -266,6 +266,18 @@ function store_uploaded_media(array $file, int $galleryId, bool $imagesOnly = fa
 
     $pdo->prepare('UPDATE galleries SET updated_at = NOW() WHERE id = ?')->execute([$galleryId]);
 
+    // Copia ridotta per la riproduzione, subito: è il momento giusto,
+    // perché l'amministratore sta già aspettando l'esito di un upload e
+    // nessuno schermo sta aspettando questa richiesta. Se fallisce, il
+    // media resta perfettamente utilizzabile con il solo originale.
+    media_ensure_rendition([
+        'id'           => $newId,
+        'type'         => str_starts_with($mime, 'image/') ? 'image' : 'video',
+        'filename'     => $filename,
+        'mime_type'    => $mime,
+        'rendition_at' => null,
+    ]);
+
     return ['id' => $newId, 'label' => $originalName];
 }
 
@@ -351,13 +363,20 @@ function playlist_for_gallery(array $gallery): array
 
     $items = [];
     foreach ($stmt->fetchAll() as $row) {
+        // Questa playlist alimenta anche le dirette su galleria, che vanno
+        // ai dispositivi: la copia ridotta serve qui come nella playlist
+        // dello schermo. L'anteprima del CMS non ne risente, perché
+        // riscrive comunque le URL verso media_preview.php (originale).
+        $row = media_ensure_rendition($row);
+        $delivery = media_delivery($row);
         $items[] = [
             'id'             => (int) $row['id'],
             'type'           => $row['type'],
-            'mime'           => $row['mime_type'],
-            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
-            'filesize'       => (int) $row['filesize'],
-            'checksum'       => $row['checksum'],
+            'mime'           => $delivery['mime'],
+            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id']
+                                . '&v=' . $delivery['checksum'],
+            'filesize'       => $delivery['filesize'],
+            'checksum'       => $delivery['checksum'],
             // Nessuna rotazione qui: la rotazione si calcola confrontando
             // l'orientamento della foto con quello di UNO schermo preciso,
             // e questa è l'anteprima "vergine" di una galleria non ancora
@@ -456,8 +475,14 @@ function playlist_version(array $screen): string
     // cambiamento di uno dei due (nuova analisi della foto, override
     // impostato o tolto) deve far scattare un nuovo download tanto quanto
     // prima faceva un cambio diretto della rotazione.
+    // Il checksum della copia ridotta entra nella firma accanto a quello
+    // dell'originale: è il file che la TV scarica davvero, quindi quando
+    // compare (o cambia) la playlist deve risultare nuova subito, senza
+    // aspettare il giro di polling successivo. Assente finché la
+    // migrazione della 1.13.0 non è stata eseguita.
+    $rendition = rendition_columns_available() ? ", COALESCE(m.rendition_checksum, '')" : '';
     $stmt = db()->prepare("SELECT GROUP_CONCAT(CONCAT_WS(':',
-                                  m.id, m.checksum, m.width, m.height,
+                                  m.id, m.checksum$rendition, m.width, m.height,
                                   COALESCE(smo.rotation, -1), m.fit, m.duration_seconds,
                                   m.muted, COALESCE(m.transition_in, g.transition_default),
                                   COALESCE(m.transition_out, g.transition_default),
@@ -501,7 +526,7 @@ function playlist_for_screen(array $screen): array
                                   smo.rotation AS override_rotation,
                                   COALESCE(m.transition_in,  g.transition_default) AS transition_in,
                                   COALESCE(m.transition_out, g.transition_default) AS transition_out,
-                                  g.transition_duration_ms
+                                  g.transition_duration_ms' . rendition_select_fields('m') . '
                            FROM media m
                            JOIN screen_galleries sg ON sg.gallery_id = m.gallery_id
                            JOIN galleries g        ON g.id = m.gallery_id
@@ -515,14 +540,23 @@ function playlist_for_screen(array $screen): array
     $items = [];
     foreach ($stmt->fetchAll() as $row) {
         $row = media_ensure_dimensions($row);
+        // Copia ridotta: generata all'upload dalla 1.13.0 in poi, qui si
+        // recuperano i file caricati prima (due per richiesta, vedi
+        // RENDITION_MAX_PER_REQUEST)
+        $row = media_ensure_rendition($row);
+        $delivery = media_delivery($row);
         $override = $row['override_rotation'] !== null ? (int) $row['override_rotation'] : null;
         $items[] = [
             'id'             => (int) $row['id'],
             'type'           => $row['type'],
-            'mime'           => $row['mime_type'],
-            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id'],
-            'filesize'       => (int) $row['filesize'],
-            'checksum'       => $row['checksum'],
+            // MIME e checksum sono quelli del file CONSEGNATO, non
+            // dell'originale: l'app usa il checksum per validare il
+            // download e come nome in cache, e il MIME per l'estensione
+            'mime'           => $delivery['mime'],
+            'url'            => config('base_url') . '/api/v1/media.php?id=' . $row['id']
+                                . '&v=' . $delivery['checksum'],
+            'filesize'       => $delivery['filesize'],
+            'checksum'       => $delivery['checksum'],
             'rotation'       => effective_item_rotation($row, $screen, $override),
             'fit'            => $row['fit'],
             'duration'       => (int) $row['duration_seconds'],
@@ -548,14 +582,17 @@ function playlist_for_screen(array $screen): array
         $stmt->execute([$screen['id'], $screen['idle_media_id']]);
         if (($m = $stmt->fetch()) !== false) {
             $m = media_ensure_dimensions($m);
+            $m = media_ensure_rendition($m);
+            $delivery = media_delivery($m);
             $override = $m['override_rotation'] !== null ? (int) $m['override_rotation'] : null;
             $idleItem = [
                 'id'       => (int) $m['id'],
                 'type'     => 'image',
-                'mime'     => $m['mime_type'],
-                'url'      => config('base_url') . '/api/v1/media.php?id=' . $m['id'] . '&idle=1',
-                'filesize' => (int) $m['filesize'],
-                'checksum' => $m['checksum'],
+                'mime'     => $delivery['mime'],
+                'url'      => config('base_url') . '/api/v1/media.php?id=' . $m['id']
+                              . '&idle=1&v=' . $delivery['checksum'],
+                'filesize' => $delivery['filesize'],
+                'checksum' => $delivery['checksum'],
                 'rotation' => effective_item_rotation($m, $screen, $override),
                 'fit'      => $m['fit'],
             ];

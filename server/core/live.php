@@ -102,19 +102,25 @@ function override_payload(?array $override, bool $light = false): ?array
     }
 
     if ($override['source_type'] === 'media') {
-        $stmt = db()->prepare('SELECT id, type, mime_type, filesize, checksum
-                               FROM media WHERE id = ? AND deleted_at IS NULL');
+        $stmt = db()->prepare('SELECT m.id, m.type, m.filename, m.mime_type, m.filesize, m.checksum'
+                              . rendition_select_fields('m') . '
+                               FROM media m WHERE m.id = ? AND m.deleted_at IS NULL');
         $stmt->execute([$override['media_id']]);
         $media = $stmt->fetch();
         if ($media === false) {
             return null; // il file è stato eliminato: la diretta decade
         }
+        // Anche una diretta su singolo file va consegnata nella copia
+        // ridotta: è lo stesso dispositivo, con la stessa memoria
+        $media = media_ensure_rendition($media);
+        $delivery = media_delivery($media);
         $payload += [
             'media_type' => $media['type'],
-            'mime'       => $media['mime_type'],
-            'url'        => config('base_url') . '/api/v1/media.php?id=' . $media['id'] . '&live=1',
-            'filesize'   => (int) $media['filesize'],
-            'checksum'   => $media['checksum'],
+            'mime'       => $delivery['mime'],
+            'url'        => config('base_url') . '/api/v1/media.php?id=' . $media['id']
+                            . '&live=1&v=' . $delivery['checksum'],
+            'filesize'   => $delivery['filesize'],
+            'checksum'   => $delivery['checksum'],
         ];
     } else {
         $payload += [

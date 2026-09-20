@@ -135,7 +135,9 @@ function purge_trash(?int $mediaId = null, ?int $galleryId = null, int $olderTha
         $params[] = $olderThanDays;
     }
 
-    $stmt = $pdo->prepare('SELECT id, filename, filesize FROM media WHERE ' . implode(' AND ', $conds));
+    $stmt = $pdo->prepare('SELECT id, filename, filesize'
+        . rendition_select_fields('media') . '
+        FROM media WHERE ' . implode(' AND ', $conds));
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
 
@@ -146,6 +148,11 @@ function purge_trash(?int $mediaId = null, ?int $galleryId = null, int $olderTha
         if (is_file($path)) {
             unlink($path);
         }
+        // La copia ridotta segue l'originale: lasciarla la renderebbe un
+        // file orfano che nessuna pulizia successiva saprebbe più
+        // ricondurre a un media
+        $bytes += (int) ($row['rendition_filesize'] ?? 0);
+        rendition_delete($row);
         $bytes += (int) $row['filesize'];
         $ids[] = (int) $row['id'];
     }

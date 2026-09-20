@@ -162,6 +162,14 @@ CREATE TABLE `media` (
   `mime_type`        VARCHAR(100)  NOT NULL,
   `filesize`         BIGINT UNSIGNED NOT NULL,         -- byte, usato dall'app per validare il download
   `checksum`         CHAR(40)      NOT NULL,           -- sha1 del file, per la cache dell'app
+  -- Copia ridotta servita ai dispositivi al posto dell'originale (vedi
+  -- core/renditions.php). L'originale resta intatto e continua a servire
+  -- il CMS. rendition_at segna il tentativo: valorizzato con
+  -- rendition_filename NULL significa "gia provato, non serve".
+  `rendition_filename` VARCHAR(255)    NULL,
+  `rendition_filesize` BIGINT UNSIGNED NULL,
+  `rendition_checksum` CHAR(40)        NULL,
+  `rendition_at`       DATETIME        NULL,
   `width`            INT UNSIGNED  NULL,               -- dimensioni naturali in pixel; solo immagini,
   `height`           INT UNSIGNED  NULL,               -- calcolate al caricamento (o al bisogno per i file precedenti)
   `rotation`         SMALLINT UNSIGNED NOT NULL DEFAULT 0,  -- legacy, non più letta in riproduzione (vedi sopra)
