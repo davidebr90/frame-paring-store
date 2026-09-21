@@ -53,8 +53,26 @@ class PlayerController(
         const val BUFFER_MAX_MS = 60_000
         const val BUFFER_FOR_PLAYBACK_MS = 4_000
         const val BUFFER_AFTER_REBUFFER_MS = 10_000
-        // 64 MB: circa mezzo minuto a 16 Mbit/s, oltre due minuti a 4 Mbit/s
+        // 64 MB: circa mezzo minuto a 16 Mbit/s, oltre due minuti a 4 Mbit/s.
+        // Su un box con poca memoria è una fetta enorme, quindi lì si
+        // scende a 16 MB: qualche secondo in meno di margine contro le
+        // oscillazioni di banda, in cambio di non farsi uccidere.
         const val TARGET_BUFFER_BYTES = 64 * 1024 * 1024
+        const val TARGET_BUFFER_BYTES_LOW = 16 * 1024 * 1024
+        const val BUFFER_MIN_MS_LOW = 10_000
+        const val BUFFER_MAX_MS_LOW = 30_000
+
+        // File LOCALE: il buffer di serie di ExoPlayer è tarato sullo
+        // streaming da rete (50 secondi, con un tetto di allocazione da
+        // 125 MB per la traccia video). Qui i byte arrivano dal disco del
+        // dispositivo: pochi secondi coprono ampiamente anche una eMMC
+        // lenta, e ogni secondo in più è memoria tolta al resto del
+        // sistema su un box che ne ha poca.
+        const val LOCAL_BUFFER_MIN_MS = 2_000
+        const val LOCAL_BUFFER_MAX_MS = 5_000
+        const val LOCAL_BUFFER_FOR_PLAYBACK_MS = 1_000
+        const val LOCAL_BUFFER_AFTER_REBUFFER_MS = 2_000
+        const val LOCAL_TARGET_BUFFER_BYTES = 8 * 1024 * 1024
 
         // Un timer di cambio file che si sveglia entro questa distanza dal
         // confine del proprio slot "è" quel confine (vedi next)
@@ -620,8 +638,26 @@ class PlayerController(
 
     // ---------- video ----------
 
+    // Player dei file in cache. Vedi LOCAL_BUFFER_*: la taratura di serie
+    // è pensata per un flusso di rete e qui costerebbe decine di MB per
+    // leggere byte che stanno già sul disco del dispositivo.
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun pooledPlayer(slot: Int): ExoPlayer =
-        players[slot] ?: ExoPlayer.Builder(context).build().also { players[slot] = it }
+        players[slot] ?: ExoPlayer.Builder(context)
+            .setLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        LOCAL_BUFFER_MIN_MS,
+                        LOCAL_BUFFER_MAX_MS,
+                        LOCAL_BUFFER_FOR_PLAYBACK_MS,
+                        LOCAL_BUFFER_AFTER_REBUFFER_MS,
+                    )
+                    .setTargetBufferBytes(LOCAL_TARGET_BUFFER_BYTES)
+                    .setPrioritizeTimeOverSizeThresholds(false)
+                    .build()
+            )
+            .build()
+            .also { players[slot] = it }
 
     // Player dedicato ai flussi esterni. I file locali non ne hanno bisogno
     // (si leggono da disco, i valori predefiniti bastano); un flusso di rete
@@ -636,15 +672,17 @@ class PlayerController(
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    BUFFER_MIN_MS,
-                    BUFFER_MAX_MS,
+                    if (lowMemoryDevice) BUFFER_MIN_MS_LOW else BUFFER_MIN_MS,
+                    if (lowMemoryDevice) BUFFER_MAX_MS_LOW else BUFFER_MAX_MS,
                     BUFFER_FOR_PLAYBACK_MS,
                     BUFFER_AFTER_REBUFFER_MS,
                 )
                 // Il tetto è in byte, non in secondi: così un flusso a
                 // bitrate alto riempie comunque il buffer senza far
                 // esplodere la memoria di un box economico
-                .setTargetBufferBytes(TARGET_BUFFER_BYTES)
+                .setTargetBufferBytes(
+                    if (lowMemoryDevice) TARGET_BUFFER_BYTES_LOW else TARGET_BUFFER_BYTES
+                )
                 .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
         )
