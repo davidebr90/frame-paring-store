@@ -174,6 +174,12 @@ class PlayerController(
         handler.removeCallbacksAndMessages(null)
         players.forEach { it?.stop() }
         streamPlayer?.stop()
+        // Le foto ancora appese alle view se ne vanno con loro: senza
+        // questo, fermare la riproduzione lascerebbe in memoria l'ultimo
+        // contenuto per tutto il tempo in cui lo schermo resta fermo
+        for (i in 0 until container.childCount) {
+            releaseImage(container.getChildAt(i))
+        }
         container.removeAllViews()
         currentView = null
         currentItem = null
@@ -206,8 +212,19 @@ class PlayerController(
         if (override.mediaType == "image") {
             val path = localFile?.path ?: return
             scope.launch {
-                val bitmap = withContext(Dispatchers.IO) { decodeScaled(path) }
-                if (token != showToken || bitmap == null) return@launch
+                val bounds = withContext(Dispatchers.IO) {
+                    BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        .also { BitmapFactory.decodeFile(path, it) }
+                }
+                if (token != showToken) return@launch
+                val (tw, th) = displayedSize(bounds.outWidth, bounds.outHeight, override.rotation, override.fit)
+                val bitmap = withContext(Dispatchers.IO) {
+                    decodeScaled(path, tw, th, allowLowColor = override.mime == "image/jpeg")
+                }
+                if (token != showToken || bitmap == null) {
+                    bitmap?.recycle()
+                    return@launch
+                }
                 val view = ImageView(context).apply {
                     scaleType = ImageView.ScaleType.FIT_XY
                     setImageBitmap(bitmap)
@@ -294,8 +311,19 @@ class PlayerController(
         showToken++
         val token = showToken
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) { decodeScaled(file.path) }
-            if (token != showToken || bitmap == null) return@launch
+            val bounds = withContext(Dispatchers.IO) {
+                BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    .also { BitmapFactory.decodeFile(file.path, it) }
+            }
+            if (token != showToken) return@launch
+            val (tw, th) = displayedSize(bounds.outWidth, bounds.outHeight, item.rotation, item.fit)
+            val bitmap = withContext(Dispatchers.IO) {
+                decodeScaled(file.path, tw, th, allowLowColor = item.mime == "image/jpeg")
+            }
+            if (token != showToken || bitmap == null) {
+                bitmap?.recycle()
+                return@launch
+            }
             val view = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_XY
                 setImageBitmap(bitmap)
@@ -347,7 +375,10 @@ class PlayerController(
         // video abortito non deve continuare a suonare in sottofondo
         for (i in container.childCount - 1 downTo 0) {
             val child = container.getChildAt(i)
-            if (child !== currentView) container.removeView(child)
+            if (child !== currentView) {
+                container.removeView(child)
+                releaseImage(child)
+            }
         }
         // Ogni ExoPlayer pooled tiene viva una TextureView con la propria
         // catena di buffer GPU (~25 MB l'una, osservato: su un Fire Stick di
@@ -387,23 +418,158 @@ class PlayerController(
 
     // ---------- immagini ----------
 
-    // Decodifica ridimensionata: una foto da 8000px non deve mai entrare
-    // in memoria a piena risoluzione (OOM sui box con poca RAM)
-    private fun decodeScaled(path: String): android.graphics.Bitmap? {
+    // Quanti pixel occuperà DAVVERO il contenuto una volta a schermo.
+    // Stessa identica matematica di applyTransform(): è lì che la view
+    // viene dimensionata, quindi è quello il numero di pixel oltre il
+    // quale decodificare è solo memoria sprecata.
+    private fun displayedSize(contentW: Int, contentH: Int, rotation: Int, fit: String): Pair<Int, Int> {
+        // Cold start: il contenitore può non essere ancora misurato. Un
+        // pannello full HD è l'ipotesi giusta su questi dispositivi, e
+        // comunque la view verrà poi dimensionata da applyTransform.
+        val w = if (container.width > 0) container.width else 1920
+        val h = if (container.height > 0) container.height else 1080
+        if (contentW <= 0 || contentH <= 0) return w to h
+
+        val swap = rotation == 90 || rotation == 270
+        val boxW = if (swap) contentH else contentW
+        val boxH = if (swap) contentW else contentH
+        val scale = if (fit == "cover") {
+            max(w.toFloat() / boxW, h.toFloat() / boxH)
+        } else {
+            min(w.toFloat() / boxW, h.toFloat() / boxH)
+        }
+        // Mai ingrandire in fase di decodifica: scalare in su un bitmap
+        // costa memoria senza aggiungere un solo dettaglio
+        val capped = min(1f, scale)
+        return max(1, (contentW * capped).roundToInt()) to max(1, (contentH * capped).roundToInt())
+    }
+
+    // Decodifica alla misura in cui il contenuto andrà a schermo, non alla
+    // potenza di due più vicina.
+    //
+    // inSampleSize dimezza soltanto: si ferma quando la metà successiva
+    // scenderebbe sotto il necessario, e può quindi lasciare in memoria
+    // fino al QUADRUPLO dei pixel che servono (il doppio per lato). Su una
+    // foto grande sono decine di MB tenuti per nulla, e su un Fire Stick
+    // di prima generazione sono la differenza fra riprodurre ed essere
+    // uccisi dal sistema. Dopo il dimezzamento si finisce quindi il
+    // lavoro con una scalatura esatta, liberando SUBITO l'intermedio.
+    //
+    // targetW/targetH sono i pixel finali a schermo; extra allarga il
+    // bersaglio per le transizioni che ingrandiscono il contenuto durante
+    // l'esposizione (Ken Burns), che altrimenti mostrerebbero un bitmap
+    // scalato in su.
+    private fun decodeScaled(
+        path: String,
+        targetW: Int,
+        targetH: Int,
+        allowLowColor: Boolean,
+        extra: Float = 1f,
+    ): android.graphics.Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
-        val maxSide = max(container.width, container.height).coerceAtLeast(1920)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val wantW = max(1, (targetW * extra).roundToInt())
+        val wantH = max(1, (targetH * extra).roundToInt())
+
         var sample = 1
-        while (bounds.outWidth / (sample * 2) > maxSide || bounds.outHeight / (sample * 2) > maxSide) {
+        while (bounds.outWidth / (sample * 2) >= wantW && bounds.outHeight / (sample * 2) >= wantH) {
             sample *= 2
         }
-        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            // 565 dimezza la memoria di ogni foto (due byte per pixel
+            // invece di quattro). Non ha canale alpha, quindi vale solo
+            // dove la trasparenza non può esserci — un JPEG — e solo sui
+            // dispositivi che hanno davvero bisogno di questo risparmio,
+            // perché su gradienti ampi 565 può mostrare striature.
+            if (allowLowColor && lowMemoryDevice) {
+                inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+            }
+        }
+        val decoded = BitmapFactory.decodeFile(path, options) ?: return null
+
+        // Ancora più grande del necessario: si scala esatto e si butta
+        // subito l'intermedio, senza aspettare il garbage collector — che
+        // sotto pressione di memoria arriva tardi, ed è esattamente
+        // quando conta.
+        //
+        // La soglia è volutamente stretta. Una copia ridotta a 1920 pixel
+        // di lato, mostrata su un pannello da 1080, arriva qui a 1,185
+        // volte il necessario: con una soglia larga non si scalerebbe mai
+        // proprio nel caso più comune di questo impianto, e si terrebbe
+        // un terzo di memoria in più per ogni foto — il doppio durante
+        // una dissolvenza incrociata, che di foto ne tiene due.
+        if (decoded.width > wantW * 1.05 || decoded.height > wantH * 1.05) {
+            val scaled = try {
+                android.graphics.Bitmap.createScaledBitmap(decoded, wantW, wantH, true)
+            } catch (e: Throwable) {
+                FileLogger.w("Scalatura esatta non riuscita, tengo il bitmap dimezzato", e)
+                null
+            }
+            if (scaled != null && scaled !== decoded) {
+                decoded.recycle()
+                return scaled
+            }
+        }
+        return decoded
+    }
+
+    // Dispositivo con poca memoria: qui si decide se accettare il
+    // compromesso sulla profondità di colore. isLowRamDevice esiste solo
+    // da API 19 e non tutti i costruttori lo dichiarano, quindi vale anche
+    // la memoria che il sistema concede all'app.
+    private val lowMemoryDevice: Boolean by lazy {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        if (am == null) {
+            false
+        } else {
+            val lowRam = android.os.Build.VERSION.SDK_INT >= 19 &&
+                runCatching { am.isLowRamDevice }.getOrDefault(false)
+            // 64 MB di heap concesso è il valore tipico dei box economici;
+            // i dispositivi moderni stanno su 192 MB e oltre
+            lowRam || am.memoryClass <= 96
+        }
+    }
+
+    // Toglie di mezzo il bitmap di una view che esce di scena. I bitmap
+    // vivono nello heap gestito, quindi prima o poi il garbage collector
+    // li raccoglierebbe da solo: "prima o poi" però non basta a un
+    // dispositivo che sta scegliendo in quel momento quale processo
+    // uccidere. Si libera subito, dopo che la view è già stata rimossa.
+    private fun releaseImage(view: View?) {
+        val imageView = view as? ImageView ?: return
+        val bitmap = (imageView.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+        imageView.setImageDrawable(null)
+        if (bitmap != null && !bitmap.isRecycled) {
+            runCatching { bitmap.recycle() }
+        }
     }
 
     private fun showImage(item: PlaylistItem, file: File, token: Int, startOffsetMs: Long = 0) {
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) { decodeScaled(file.path) }
+            // Le dimensioni naturali servono per sapere quanti pixel
+            // finiranno davvero a schermo: si leggono senza decodificare
+            val bounds = withContext(Dispatchers.IO) {
+                BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    .also { BitmapFactory.decodeFile(file.path, it) }
+            }
             if (token != showToken) return@launch
+            val (targetW, targetH) = displayedSize(bounds.outWidth, bounds.outHeight, item.rotation, item.fit)
+            // Ken Burns ingrandisce il contenuto fino a 1,08 durante
+            // l'esposizione: si decodifica con un filo di margine
+            val extra = if (effectiveIn(item) == "kenburns") 1.1f else 1f
+            val bitmap = withContext(Dispatchers.IO) {
+                decodeScaled(file.path, targetW, targetH, allowLowColor = item.mime == "image/jpeg", extra = extra)
+            }
+            if (token != showToken) {
+                // Il contenuto è cambiato mentre si decodificava: questo
+                // bitmap non lo vedrà nessuno, e non deve restare in giro
+                bitmap?.recycle()
+                return@launch
+            }
             if (bitmap == null) {
                 scheduleSkip(token)
                 return@launch
@@ -596,7 +762,13 @@ class PlayerController(
         // La cleanup può scattare dopo che un nuovo show ha già riassegnato
         // lo slot: si ferma il player solo se quello slot non è più in uso
         val cleanup = {
-            outgoingView?.let { container.removeView(it) }
+            outgoingView?.let {
+                container.removeView(it)
+                // La foto appena uscita di scena non serve più a nessuno:
+                // la sua memoria si libera qui, non quando passerà il
+                // garbage collector (vedi releaseImage)
+                releaseImage(it)
+            }
             if (outgoingSlot >= 0 && outgoingSlot != currentSlot) players[outgoingSlot]?.stop()
         }
 
