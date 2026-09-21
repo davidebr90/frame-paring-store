@@ -464,7 +464,7 @@ class MainActivity : Activity() {
         if (level == TRIM_MEMORY_UI_HIDDEN) return
         if (level < TRIM_MEMORY_RUNNING_LOW) return
 
-        FileLogger.i("Memoria scarsa segnalata dal sistema (livello $level)")
+        FileLogger.i("Memoria scarsa segnalata dal sistema (livello $level): " + MemoryProbe.describe(this))
         playerController.trimMemory()
 
         // Critico mentre siamo in esecuzione, oppure processo in
@@ -676,7 +676,11 @@ class MainActivity : Activity() {
                 delay(interval * 1_000L)
                 val base = prefs.baseUrl ?: continue
                 val token = prefs.authToken ?: continue
-                val state = runCatching { ApiClient.state(base, token) }.getOrNull() ?: continue
+                // I numeri della memoria viaggiano con il battito: nessuna
+                // chiamata in più, e il CMS smette di essere cieco su ciò
+                // che succede dentro il dispositivo (vedi MemoryProbe)
+                val memoria = MemoryProbe.queryString(this@MainActivity)
+                val state = runCatching { ApiClient.state(base, token, memoria) }.getOrNull() ?: continue
                 interval = state.stateInterval.coerceIn(5, 60)
                 applyOverride(state.override)
 

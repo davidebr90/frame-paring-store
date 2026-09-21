@@ -111,6 +111,27 @@ cms_header($screen['name'], 'screens');
             'time'   => date('H:i', strtotime($screen['last_restart_at'])),
         ])) ?>
       <?php endif; ?>
+      <?php
+      // Memoria del dispositivo, allegata dall'app al proprio battito di
+      // stato (vedi core/memory.php): prima questo dato si poteva avere
+      // solo collegandosi via adb al televisore
+      if (!empty($screen['mem_at']) && $screen['mem_avail_mb'] !== null):
+          $memLinea = $screen['mem_used_mb'] !== null
+              ? t('sv.memory_line', [
+                  'free'  => (int) $screen['mem_avail_mb'],
+                  'total' => (int) $screen['mem_total_mb'],
+                  'app'   => (int) $screen['mem_used_mb'] . ' MB',
+                ])
+              : t('sv.memory_line_short', [
+                  'free'  => (int) $screen['mem_avail_mb'],
+                  'total' => (int) $screen['mem_total_mb'],
+                ]);
+      ?>
+        · <?= e(t('sv.memory_label')) ?>: <?= e($memLinea) ?>
+        <?php if ((int) $screen['mem_low'] === 1): ?>
+          <span class="badge badge-pending"><?= e(t('sv.memory_low_note')) ?></span>
+        <?php endif; ?>
+      <?php endif; ?>
     </div>
   </div>
   <div class="head-actions">

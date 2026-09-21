@@ -110,8 +110,11 @@ object ApiClient {
         val stateInterval: Int,
     )
 
-    suspend fun state(baseUrl: String, token: String): ScreenState = withContext(Dispatchers.IO) {
-        val conn = open("$baseUrl/api/v1/state.php")
+    suspend fun state(baseUrl: String, token: String, memory: String = ""): ScreenState = withContext(Dispatchers.IO) {
+        // I numeri della memoria viaggiano appesi al battito, che passa
+        // comunque: nessuna chiamata in più, una manciata di byte. Vedi
+        // MemoryProbe e core/memory.php sul server.
+        val conn = open("$baseUrl/api/v1/state.php$memory")
         conn.setRequestProperty("Authorization", "Bearer $token")
         val json = JSONObject(conn.readResponse())
         ScreenState(

@@ -41,6 +41,61 @@ colmare quel divario: andava tolto alla fonte.
   più. La regola sul peso vale solo a parità di pixel, dove l'unico
   guadagno possibile è la ricompressione.
 
+### Aggiunto (app Android TV)
+
+- **Le foto si decodificano alla misura esatta dello schermo.**
+  `inSampleSize` sa solo dimezzare: si ferma quando la metà successiva
+  scenderebbe sotto il necessario, e può quindi lasciare in memoria fino
+  al quadruplo dei pixel che servono. Ora la decodifica punta ai pixel
+  che il contenuto occuperà davvero, calcolati con la stessa matematica
+  che dimensiona la view, e rifinisce con una scalatura esatta liberando
+  subito l'intermedio.
+- **Due byte per pixel invece di quattro** sui dispositivi con poca
+  memoria, e solo per i JPEG — dove la trasparenza non può esserci. Su
+  gradienti ampi quel formato può mostrare striature, quindi non si usa
+  dove non serve.
+- **Le foto uscite di scena si liberano subito**, invece di aspettare il
+  garbage collector: sotto pressione di memoria arriva tardi, ed è
+  esattamente quando conta. Misurato a schermo verticale: 9,4 MB → 3,3 MB
+  per foto, e 6,7 MB invece di 18,8 durante una dissolvenza, che di foto
+  ne tiene due.
+- **Buffer video proporzionati alla provenienza dei byte**: il player dei
+  file in cache ereditava la taratura di ExoPlayer per lo streaming
+  mobile (cinquanta secondi, tetto di allocazione da 125 MB). Da un file
+  su disco bastano due secondi di minimo e cinque di massimo, con un
+  tetto di 8 MB. Il player dei flussi esterni scende a 16 MB sui
+  dispositivi con poca memoria.
+- **L'app ascolta l'allarme di memoria del sistema** invece di subirlo.
+  Android avvisa prima di iniziare a uccidere, e finora quel segnale non
+  veniva letto: l'unica notizia della pressione di memoria arrivava sotto
+  forma di processo terminato. Ora si rilasciano i player non in uso e le
+  view superate; il player di ciò che è in onda non si tocca mai.
+- **Servizio in primo piano**: quando la memoria finisce Android sceglie
+  la vittima per priorità, e un'app con la sola Activity visibile sta in
+  cima alla lista dei sacrificabili appena qualcosa la copre. Il servizio
+  dichiara al sistema che questo processo fa un lavoro che deve
+  continuare anche senza che nessuno lo guardi, cioè la definizione di
+  una vetrina. È anche il ripristino più rapido disponibile: il sistema
+  ricrea il servizio da solo dopo averlo terminato, e alla ricreazione la
+  vetrina riparte, senza attendere il giro dell'AlarmManager.
+- **Ritorno in primo piano in mezzo minuto** quando qualcosa passa sopra
+  all'app senza ucciderla, invece dei quindici minuti del watchdog. Con
+  un freno: dopo tre ritorni ravvicinati l'app si arrende per dieci
+  minuti, altrimenti chi ha in mano il telecomando non riuscirebbe più ad
+  aprire le impostazioni di Fire TV.
+- **Riapertura automatica dopo un errore non gestito**: l'app prenota la
+  propria resurrezione prima di morire, e la sveglia vive presso il
+  sistema.
+- **Memoria visibile dal CMS**: l'app allega al proprio battito di stato
+  quanta memoria usa e quanta ne resta al dispositivo. Finora quei numeri
+  si potevano leggere solo collegandosi via adb al televisore, cioè quasi
+  mai: la diagnosi del guasto di agosto è arrivata settimane dopo i
+  fatti. La scheda dello schermo li mostra, e la cronologia registra
+  quando un dispositivo entra o esce dall'affanno di memoria.
+- La cronologia distingue ora due nuovi motivi di riavvio, `service` e
+  `crash`: prima entrambi sarebbero risultati "manuale", nascondendo
+  esattamente ciò che si vuole sapere.
+
 ### Note
 
 - **Geometria identica, di proposito**: la copia è solo scalata, mai
@@ -68,7 +123,18 @@ ALTER TABLE `media`
   ADD COLUMN `rendition_filesize` BIGINT UNSIGNED NULL AFTER `rendition_filename`,
   ADD COLUMN `rendition_checksum` CHAR(40)        NULL AFTER `rendition_filesize`,
   ADD COLUMN `rendition_at`       DATETIME        NULL AFTER `rendition_checksum`;
+
+ALTER TABLE `screens`
+  ADD COLUMN `mem_used_mb`   INT UNSIGNED NULL AFTER `last_restart_at`,
+  ADD COLUMN `mem_avail_mb`  INT UNSIGNED NULL AFTER `mem_used_mb`,
+  ADD COLUMN `mem_total_mb`  INT UNSIGNED NULL AFTER `mem_avail_mb`,
+  ADD COLUMN `mem_low`       TINYINT(1)   NULL AFTER `mem_total_mb`,
+  ADD COLUMN `mem_at`        DATETIME     NULL AFTER `mem_low`,
+  ADD COLUMN `mem_event_at`  DATETIME     NULL AFTER `mem_at`;
 ```
+
+Entrambe sono facoltative nell'immediato: finché non si eseguono, il
+sistema serve gli originali e non registra la memoria, senza errori.
 
 ## [1.12.11] — 2026-08-31
 

@@ -12,6 +12,11 @@ require_once dirname(__DIR__, 2) . '/core/live.php';
 
 $screen = require_device();
 
+// La TV allega al battito quanta memoria sta usando e quanta ne resta al
+// dispositivo (vedi core/memory.php). Sono dati che prima si potevano
+// avere solo collegandosi via adb al televisore, cioè quasi mai.
+memory_record($screen, $_GET);
+
 $override = override_payload(active_override_for_screen((int) $screen['id']), light: true);
 
 json_out([

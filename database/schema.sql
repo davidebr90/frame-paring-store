@@ -108,8 +108,17 @@ CREATE TABLE `screens` (
   `overlay_json`     TEXT          NULL,               -- banner personalizzato di questo schermo; NULL = eredita le impostazioni generali
   `last_seen_at`     DATETIME      NULL,               -- ultimo polling ricevuto
   `restart_count`    INT UNSIGNED  NOT NULL DEFAULT 0, -- avvii veri del processo app (non il polling)
-  `last_restart_reason` VARCHAR(20) NULL,               -- 'boot' | 'watchdog' | 'manual'
+  `last_restart_reason` VARCHAR(20) NULL,               -- 'boot' | 'watchdog' | 'manual' | 'service' | 'crash'
   `last_restart_at`  DATETIME      NULL,
+  -- Memoria del dispositivo, allegata dall'app al battito di stato
+  -- (vedi core/memory.php). NULL finche' una TV con l'app 1.13.0 o
+  -- successiva non si fa viva.
+  `mem_used_mb`      INT UNSIGNED  NULL,               -- quanta ne usa la vetrina
+  `mem_avail_mb`     INT UNSIGNED  NULL,               -- quanta ne resta libera al dispositivo
+  `mem_total_mb`     INT UNSIGNED  NULL,               -- quanta ne ha in tutto
+  `mem_low`          TINYINT(1)    NULL,               -- 1 = il dispositivo e' in affanno
+  `mem_at`           DATETIME      NULL,               -- quando sono arrivati questi numeri
+  `mem_event_at`     DATETIME      NULL,               -- ultimo evento di memoria registrato in cronologia
   `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_screens_pairing_code` (`pairing_code`),

@@ -130,6 +130,14 @@ function screen_event_view(array $ev): array
         case 'revoked':
             return ['badge-revoked', t('sv.ev.revoked'), ''];
 
+        // Il dispositivo è entrato o uscito dall'affanno di memoria: è il
+        // segnale che precede i kill di sistema, e finora si poteva
+        // vedere solo collegandosi via adb al televisore
+        case 'memory':
+            $bassa = $reason !== null && str_starts_with($reason, 'low');
+            return [$bassa ? 'badge-pending' : 'badge-online',
+                    t('sv.ev.memory'), memory_event_detail($reason)];
+
         case 'registered':
             return ['badge-offline', t('sv.ev.registered'), ''];
 

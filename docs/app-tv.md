@@ -206,17 +206,67 @@ vetrina, imposta entrambi al valore più alto disponibile (idealmente
 
 ## Ripristino automatico
 
-Se il sistema termina il processo dell'app (pressione di memoria) o
-qualcos'altro prende il fuoco sopra di essa senza ucciderla (screensaver,
-Home), un controllo periodico ogni 15 minuti (`AlarmManager`, indipendente
-dal processo dell'app) la riporta in primo piano da sola — una notifica a
-schermo intero è l'unico canale che Android garantisce anche a un processo
-appena resuscitato per l'occasione, esattamente come per una sveglia o una
-chiamata in arrivo. Nel frattempo lo schermo può restare sulla Home della
-Fire Stick fino a 15 minuti: è previsto, non serve intervenire a mano.
-Se lo schermo risulta "Offline" nel CMS più a lungo di così, il ripristino
-automatico non sta funzionando: vale la pena controllare il registro
-dell'app (`adb logcat -v time FPS:* AndroidRuntime:E *:S`) sul posto.
+Tre reti di sicurezza indipendenti, dalla più rapida alla più lenta.
+
+**Il servizio in primo piano.** Finché la vetrina è in funzione, l'app
+tiene attivo un servizio che dichiara al sistema di star facendo un lavoro
+che deve continuare anche senza che nessuno lo guardi. Non accelera nulla:
+sposta il processo più in basso nella lista di quelli che Android uccide
+per primi quando la memoria finisce, che è il punto. Se il sistema lo
+termina comunque, lo ricrea da solo e la vetrina riparte con lui, in pochi
+secondi. La notifica che accompagna il servizio sta al minimo della scala
+di importanza: sul televisore non compare nulla.
+
+**Il ritorno in primo piano.** Se qualcosa passa sopra all'app senza
+ucciderla (screensaver, Home, un avviso di sistema), mezzo minuto dopo la
+vetrina torna davanti da sola. Dopo tre ritorni ravvicinati l'app si
+ferma per dieci minuti: serve a lasciare il dispositivo utilizzabile a chi
+ha in mano il telecomando, altrimenti non si riuscirebbe più ad aprire le
+impostazioni di Fire TV per farci nulla.
+
+**Il controllo periodico.** Ogni 15 minuti un `AlarmManager` registrato
+presso il sistema, e quindi vivo anche a processo morto, verifica che la
+vetrina sia in vista e la richiama con una notifica a schermo intero —
+l'unico canale che Android garantisce a un processo appena resuscitato
+per l'occasione, lo stesso delle sveglie e delle chiamate in arrivo.
+
+Dopo un errore non gestito, infine, l'app prenota la propria riapertura
+prima di morire: cinque secondi e torna su.
+
+Se uno schermo risulta "Offline" nel CMS molto più a lungo, il ripristino
+automatico non sta funzionando: vale la pena guardare la *Cronologia*
+nella scheda dello schermo (dice quando e perché è ripartito) e, sul
+posto, il registro dell'app
+(`adb logcat -v time FPS:* AndroidRuntime:E *:S`).
+
+## Memoria: cosa fa l'app per starci dentro
+
+Un Fire TV Stick di prima generazione ha meno di 1 GB di memoria condivisa
+con oltre centocinquanta processi di sistema, e concede all'app in primo
+piano una trentina di MB prima che il kernel cominci a scegliere vittime.
+Una foto da fotocamera, decompressa, ne occupa molti di più: 4 byte per
+pixel, cioè 124 MB per un'immagine da 31 megapixel. Da qui i quattro
+accorgimenti che rendono il sistema utilizzabile su quell'hardware.
+
+1. **Il server manda una copia ridotta**, non l'originale: scalata al lato
+   lungo di un pannello full HD. Su una foto da 20 MB significa scaricarne
+   0,3.
+2. **L'app decodifica alla misura esatta** con cui l'immagine finirà a
+   schermo, e sui dispositivi con poca memoria usa due byte per pixel
+   invece di quattro per i JPEG.
+3. **Le foto uscite di scena vengono liberate subito**, senza aspettare il
+   garbage collector.
+4. **I buffer video sono proporzionati**: pochi secondi per un file letto
+   dal disco, dove la taratura di serie ne terrebbe cinquanta.
+
+Quando il sistema segnala che la memoria scarseggia, l'app rilascia i
+player non in uso; se la dichiara critica, cede temporaneamente anche la
+finestra sopra-tutto e la rimonta cinque minuti dopo.
+
+La scheda di ogni schermo nel CMS mostra quanta memoria resta libera sul
+dispositivo e quanta ne sta usando la vetrina, e la cronologia registra
+quando un dispositivo entra o esce dall'affanno. Prima della 1.13.0 quei
+numeri si potevano leggere solo collegandosi via adb al televisore.
 
 ## Risoluzione dei problemi
 
