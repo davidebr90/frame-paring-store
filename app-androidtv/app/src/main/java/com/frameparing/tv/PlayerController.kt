@@ -204,6 +204,49 @@ class PlayerController(
         currentSlot = -1
     }
 
+    // Il sistema segnala che la memoria scarseggia: si molla tutto ciò
+    // che si può mollare senza interrompere quello che è in onda.
+    // Chiamata da MainActivity.onTrimMemory().
+    //
+    // Non tocca il player del contenuto corrente: fermarlo per liberare
+    // memoria significherebbe spegnere la vetrina esattamente nel momento
+    // in cui il sistema sta decidendo se valga la pena tenerci vivi, che è
+    // il contrario di quel che serve.
+    fun trimMemory() {
+        var liberati = 0
+        players.forEachIndexed { i, p ->
+            if (i != currentSlot && p != null) {
+                playerListeners[i]?.let { p.removeListener(it) }
+                playerListeners[i] = null
+                p.release()
+                players[i] = null
+                liberati++
+            }
+        }
+        // Il player dei flussi tiene il buffer più grosso di tutti: se in
+        // questo momento non sta riproducendo lui, se ne va per primo
+        if (currentSlot != -1 || currentItem?.type != "video") {
+            streamPlayer?.let {
+                streamListener?.let { l -> it.removeListener(l) }
+                it.release()
+                liberati++
+            }
+            streamPlayer = null
+            streamListener = null
+        }
+        // Le view superate che non fossero ancora state ripulite
+        for (i in container.childCount - 1 downTo 0) {
+            val child = container.getChildAt(i)
+            if (child !== currentView) {
+                container.removeView(child)
+                releaseImage(child)
+            }
+        }
+        if (liberati > 0) {
+            FileLogger.i("Memoria scarsa: rilasciati $liberati player non in uso")
+        }
+    }
+
     fun release() {
         stop()
         players.forEachIndexed { i, p ->

@@ -74,6 +74,9 @@ class MainActivity : Activity() {
     private lateinit var playerContainerView: FrameLayout
     private lateinit var bannerLayerView: FrameLayout
     private var kioskActive = false
+    // Rimonta la finestra sopra-tutto dopo che la memoria è tornata
+    // respirabile (vedi onTrimMemory)
+    private val kioskRetry = android.os.Handler(android.os.Looper.getMainLooper())
 
     // Richiesta di sincronizzazione anticipata. CONFLATED: più segnali
     // ravvicinati valgono per uno solo, non si accodano.
@@ -380,7 +383,48 @@ class MainActivity : Activity() {
         }
     }
 
+    // Il sistema avvisa PRIMA di iniziare a uccidere: questo è l'unico
+    // momento in cui si può ancora fare qualcosa. Finora l'app non
+    // ascoltava affatto questo segnale, e l'unica notizia della pressione
+    // di memoria arrivava sotto forma di processo terminato.
+    //
+    // La finestra sopra-tutto (vedi KioskOverlay) è una superficie a
+    // schermo intero in più, con i suoi buffer grafici. Serve, e serve
+    // proprio su questi dispositivi: è ciò che tiene la vetrina sopra gli
+    // avvisi di Fire OS. Per questo non si rinuncia mai a priori, ma solo
+    // quando il sistema dichiara la memoria critica — lì l'alternativa
+    // non è "vetrina con o senza protezione", è "vetrina o niente". Si
+    // rimonta da sola poco dopo, quando la pressione è passata.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // UI_HIDDEN non parla di memoria: dice che l'interfaccia non è
+        // più in vista. Confonderlo con un allarme di memoria farebbe
+        // smontare la finestra sopra-tutto esattamente quando qualcosa è
+        // passato sopra alla vetrina, cioè quando serve di più.
+        if (level == TRIM_MEMORY_UI_HIDDEN) return
+        if (level < TRIM_MEMORY_RUNNING_LOW) return
+
+        FileLogger.i("Memoria scarsa segnalata dal sistema (livello $level)")
+        playerController.trimMemory()
+
+        // Critico mentre siamo in esecuzione, oppure processo in
+        // background e quindi già in lista per essere terminato
+        val critico = level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_BACKGROUND
+        if (critico && kioskActive) {
+            FileLogger.i("Memoria critica: la finestra sopra-tutto cede il posto, si riprova fra poco")
+            exitKioskOverlay()
+            kioskRetry.removeCallbacksAndMessages(null)
+            kioskRetry.postDelayed({
+                if (!kioskActive && settingsPanel.visibility != View.VISIBLE) {
+                    enterKioskOverlay()
+                    FileLogger.i("Finestra sopra-tutto ripristinata")
+                }
+            }, KIOSK_RETRY_MS)
+        }
+    }
+
     override fun onDestroy() {
+        kioskRetry.removeCallbacksAndMessages(null)
         playerController.release()
         kiosk.release()
         scope.cancel()
@@ -599,6 +643,10 @@ class MainActivity : Activity() {
         // Letto da BootReceiver/WatchdogReceiver per dire al CMS PERCHÉ
         // questo avvio è successo (vedi reportRestart più sotto)
         const val EXTRA_RESTART_REASON = "restart_reason"
+
+        // Quanto si resta senza la finestra sopra-tutto dopo un allarme
+        // di memoria critica, prima di riprovare a montarla
+        private const val KIOSK_RETRY_MS = 5 * 60 * 1000L
 
         private const val SYNC_TOLERANCE_MS = 3_500L
         // Durante lo sforamento di un video la fine del file si ri-aggancia
