@@ -20,6 +20,7 @@
     <string name="status_syncing">Downloading content…</string>
     <string name="status_empty">No content assigned to this screen</string>
     <string name="watchdog_notification_text">Restoring the display…</string>
+    <string name="service_notification_text">Display running</string>
     <string name="status_revoked">Access revoked from the CMS: pairing needed again</string>
     <string name="autostart_title">Automatic start</string>
     <string name="autostart_hint">This device needs a permission for the app to restart on its own at power-on. It is granted once.</string>

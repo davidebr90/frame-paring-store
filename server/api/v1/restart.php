@@ -26,8 +26,13 @@ require_method('POST');
 $screen = require_device();
 
 $body = read_json_body();
+// 'service': il sistema aveva terminato il processo e lo ha ricreato da
+// solo attraverso il servizio in primo piano. 'crash': l'app è morta per
+// un errore e si è riaperta da sé. Distinguerli da 'manual' è il punto:
+// un contatore che dicesse "manuale" per un riavvio dopo un crash
+// nasconderebbe proprio ciò che si vuole sapere.
 $reason = $body['reason'] ?? 'manual';
-if (!in_array($reason, ['boot', 'watchdog', 'manual'], true)) {
+if (!in_array($reason, ['boot', 'watchdog', 'manual', 'service', 'crash'], true)) {
     $reason = 'manual';
 }
 

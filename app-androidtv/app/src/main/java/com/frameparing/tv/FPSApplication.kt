@@ -35,6 +35,12 @@ class FPSApplication : Application() {
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching { FileLogger.crash(thread, throwable) }
+            // Prima di morire si prenota la propria resurrezione. La
+            // sveglia è registrata presso il sistema, quindi sopravvive
+            // alla fine del processo: senza, dopo un crash la vetrina
+            // restava spenta fino al giro successivo del watchdog, cioè
+            // fino a un quarto d'ora.
+            runCatching { Watchdog.scheduleRestart(this) }
             previousHandler?.uncaughtException(thread, throwable)
         }
     }

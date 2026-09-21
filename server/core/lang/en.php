@@ -672,6 +672,8 @@ return [
     'sv.restart_reason.boot'     => 'at power-on',
     'sv.restart_reason.watchdog' => 'from automatic recovery',
     'sv.restart_reason.manual'   => 'manual',
+    'sv.restart_reason.service'  => 'self-restarted after a system shutdown',
+    'sv.restart_reason.crash'    => 'self-restarted after an error',
     'sv.history'             => 'History',
     'sv.history_empty'       => 'No events recorded yet. App restarts and periods when the screen was unreachable will appear here.',
     'sv.history_when'        => 'When',

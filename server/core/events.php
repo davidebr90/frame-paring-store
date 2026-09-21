@@ -23,7 +23,11 @@ declare(strict_types=1);
 //
 // Due tipi di evento:
 //  - 'restart' — l'app ha segnalato un avvio vero del processo, con il
-//    motivo dichiarato ('boot' | 'watchdog' | 'manual').
+//    motivo dichiarato ('boot' | 'watchdog' | 'manual' | 'service' |
+//    'crash'). Gli ultimi due distinguono un ripristino automatico dopo
+//    un arresto del sistema o dopo un errore dell'app da un normale
+//    avvio: senza, entrambi risulterebbero "manuale" e nasconderebbero
+//    proprio cio che c'e da sapere.
 //  - 'gap'     — il dispositivo ha ripreso a farsi vivo dopo essere stato
 //    irraggiungibile più a lungo della finestra di "online". Registrato al
 //    ritorno, non alla scomparsa: il server non ha modo di accorgersi in

@@ -77,6 +77,11 @@ class MainActivity : Activity() {
     // Rimonta la finestra sopra-tutto dopo che la memoria è tornata
     // respirabile (vedi onTrimMemory)
     private val kioskRetry = android.os.Handler(android.os.Looper.getMainLooper())
+    // Riporta la vetrina davanti quando qualcosa le passa sopra senza
+    // ucciderla (vedi programmaRipristinoRapido)
+    private val ripristinoRapido = android.os.Handler(android.os.Looper.getMainLooper())
+    private var ritorniRecenti = 0
+    private var primoRitornoMs = 0L
 
     // Richiesta di sincronizzazione anticipata. CONFLATED: più segnali
     // ravvicinati valgono per uno solo, non si accodano.
@@ -129,6 +134,10 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         enterImmersiveMode()
         Watchdog.arm(this)
+        // Priorità alta al processo finché la vetrina è in funzione, e
+        // ricreazione automatica se il sistema lo termina (vedi
+        // PlaybackService): è la rete di sicurezza più rapida delle tre
+        PlaybackService.start(this)
         requestNotificationPermissionIfNeeded()
 
         prefs = Prefs(this)
@@ -182,17 +191,68 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         isForeground = true
+        ripristinoRapido.removeCallbacksAndMessages(null)
         FileLogger.i("onStart: in primo piano")
     }
 
     override fun onStop() {
         super.onStop()
         isForeground = false
+        programmaRipristinoRapido()
         // Fondamentale per capire A POSTERIORI se a coprire l'app sia stato
         // qualcosa di esterno (screensaver, Home) o un nostro riavvio: senza
         // questa riga nel log, "in Home molto spesso" resta un sintomo senza
         // un orario preciso a cui agganciarlo.
         FileLogger.i("onStop: qualcosa è passato sopra (Home, screensaver, o un riavvio nostro)")
+    }
+
+    // ---------- ripristino rapido ----------
+
+    // Il watchdog dell'AlarmManager non può svegliarsi più spesso di ogni
+    // quindici minuti: è il minimo che Android concede a una sveglia
+    // ripetuta. Finché il processo è vivo, però, quell'attesa non serve a
+    // nulla — basta accorgersi che qualcosa è passato sopra e tornare
+    // davanti. Questo copre il caso più frequente in vetrina (la Home di
+    // Fire TV, uno screensaver, un avviso di sistema) in mezzo minuto
+    // invece che in un quarto d'ora.
+    //
+    // CON UN FRENO, però: un dispositivo che riprende il fuoco all'infinito
+    // diventa inutilizzabile: chi ha in mano il telecomando non riesce più
+    // ad aprire le impostazioni di Fire TV per farci qualsiasi cosa. Dopo
+    // alcuni tentativi ravvicinati l'app si arrende per un po' e lascia il
+    // dispositivo a chi lo sta usando; il watchdog resta comunque lì.
+    private fun programmaRipristinoRapido() {
+        // Uscita voluta dall'app stessa (cambio lingua, riassociazione):
+        // non c'è nulla da riprendere
+        if (isFinishing || prefs.authToken == null) return
+
+        val adesso = SystemClock.elapsedRealtime()
+        if (adesso - primoRitornoMs > FINESTRA_INSISTENZA_MS) {
+            primoRitornoMs = adesso
+            ritorniRecenti = 0
+        }
+        if (ritorniRecenti >= MAX_RITORNI_RAVVICINATI) {
+            FileLogger.i("Ripristino rapido in pausa: il dispositivo sembra in uso da qualcuno")
+            return
+        }
+
+        ripristinoRapido.removeCallbacksAndMessages(null)
+        ripristinoRapido.postDelayed({
+            if (isForeground || isFinishing) return@postDelayed
+            ritorniRecenti++
+            FileLogger.i("Ripristino rapido: riporto la vetrina davanti (tentativo $ritorniRecenti)")
+            try {
+                startActivity(
+                    android.content.Intent(this, MainActivity::class.java)
+                        .addFlags(
+                            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                )
+            } catch (e: Throwable) {
+                FileLogger.w("Ripristino rapido non riuscito", e)
+            }
+        }, RIPRISTINO_RAPIDO_MS)
     }
 
     // ---------- impostazioni richiamabili dal telecomando ----------
@@ -647,6 +707,16 @@ class MainActivity : Activity() {
         // Quanto si resta senza la finestra sopra-tutto dopo un allarme
         // di memoria critica, prima di riprovare a montarla
         private const val KIOSK_RETRY_MS = 5 * 60 * 1000L
+
+        // Ripristino rapido (vedi programmaRipristinoRapido): mezzo minuto
+        // è abbastanza perché un avviso di sistema momentaneo se ne vada
+        // da solo, e poco abbastanza da non lasciare una vetrina spenta
+        private const val RIPRISTINO_RAPIDO_MS = 30_000L
+        // Oltre questi tentativi dentro la finestra qui sotto, l'app
+        // smette di insistere: vuol dire che qualcuno sta usando il
+        // dispositivo di proposito
+        private const val MAX_RITORNI_RAVVICINATI = 3
+        private const val FINESTRA_INSISTENZA_MS = 10 * 60 * 1000L
 
         private const val SYNC_TOLERANCE_MS = 3_500L
         // Durante lo sforamento di un video la fine del file si ri-aggancia

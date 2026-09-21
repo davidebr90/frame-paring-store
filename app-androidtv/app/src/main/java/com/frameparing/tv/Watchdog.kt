@@ -33,6 +33,35 @@ import android.os.SystemClock
 // la sveglia (vedi WatchdogReceiver).
 object Watchdog {
     private const val REQUEST_CODE = 1001
+    private const val RESTART_REQUEST_CODE = 1003
+
+    // Quanto si aspetta, dopo un crash, prima di riaprire la vetrina.
+    // Abbastanza perché il processo sia morto davvero e il sistema abbia
+    // finito di ripulire, abbastanza poco da non lasciare uno schermo
+    // spento in negozio.
+    private const val RESTART_DELAY_MS = 5_000L
+
+    // Prenota la riapertura dell'app dopo un crash. Chiamata dal gestore
+    // globale delle eccezioni non gestite (vedi FPSApplication) nei
+    // pochi istanti fra l'errore e la fine del processo: la sveglia vive
+    // presso il sistema, quindi resta valida anche dopo.
+    fun scheduleRestart(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(MainActivity.EXTRA_RESTART_REASON, "crash")
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            RESTART_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.set(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            SystemClock.elapsedRealtime() + RESTART_DELAY_MS,
+            pendingIntent,
+        )
+    }
 
     // Richiamata da MainActivity.onCreate(): essendo l'activity singleTask,
     // onCreate() gira una sola volta per ogni avvio vero del processo (boot,

@@ -18,6 +18,12 @@
          senza questa dichiarazione l'app non comparirebbe nemmeno nella
          schermata "Mostra sopra altre app" e l'avvio al boot fallirebbe -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Servizio in primo piano: e cio che toglie il processo dalla cima
+         della lista dei sacrificabili quando la memoria finisce (vedi
+         PlaybackService). Il permesso base serve da Android 9, quello per
+         tipo da Android 14 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- Stessa APK per Android TV e Fire OS: nessun requisito hardware bloccante -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -60,6 +66,15 @@
         <receiver
             android:name=".WatchdogReceiver"
             android:exported="false" />
+
+        <!-- Tiene alta la priorita del processo mentre la vetrina e in
+             funzione, e lo fa ricreare dal sistema se viene terminato
+             (START_STICKY). Il tipo mediaPlayback e obbligatorio da
+             Android 14 in poi; sotto viene semplicemente ignorato -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
     </application>
 </manifest>

@@ -672,6 +672,8 @@ return [
     'sv.restart_reason.boot'     => 'all’accensione',
     'sv.restart_reason.watchdog' => 'da recupero automatico',
     'sv.restart_reason.manual'   => 'manuale',
+    'sv.restart_reason.service'  => 'ripartita da sola dopo un arresto di sistema',
+    'sv.restart_reason.crash'    => 'ripartita da sola dopo un errore',
     'sv.history'             => 'Cronologia',
     'sv.history_empty'       => 'Nessun evento registrato finora. Compariranno qui i riavvii dell’app e i periodi in cui lo schermo è rimasto irraggiungibile.',
     'sv.history_when'        => 'Quando',
