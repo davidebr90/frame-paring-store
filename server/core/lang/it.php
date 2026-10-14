@@ -1124,6 +1124,13 @@ return [
     'img.regenerate'         => 'Continua la rigenerazione',
     'img.all_done'           => 'Tutte le immagini hanno la copia aggiornata.',
     'img.no_gd'              => 'Questo hosting non ha la libreria GD: le copie non si possono generare e ai televisori vengono inviati gli originali.',
+    'img.card_color'         => 'Colore sui televisori',
+    'img.hint_color'         => 'Riguarda come il televisore decodifica le immagini, non come il server le prepara: cambiarlo non rigenera nulla. Il risparmio dimezza la memoria che una foto occupa sul dispositivo, ma nelle zone uniformi — cieli, pareti, pelle — le sfumature procedono a gradini e si vedono delle bande. Su una vetrina fotografica conviene tenerlo spento, e accenderlo solo se un dispositivo non regge il colore pieno.',
+    'img.low_color'          => 'Risparmia memoria sui dispositivi deboli',
+    'img.low_color_on'       => 'acceso: meno memoria, bande nelle sfumature',
+    'img.low_color_off'      => 'spento: colore pieno',
+    'img.color_save'         => 'Salva la scelta sul colore',
+    'img.color_saved'        => 'Scelta sul colore salvata: i televisori la applicano al prossimo controllo, entro un minuto.',
     'img.err_quality'        => 'Il livello di qualità deve stare fra :min e :max.',
     'img.err_side'           => 'Il lato più lungo deve stare fra :min e :max pixel.',
 ];

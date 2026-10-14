@@ -67,6 +67,19 @@ function rendition_quality(): int
     return max(RENDITION_QUALITY_MIN, min(RENDITION_QUALITY_MAX, $v));
 }
 
+// Permesso di usare il colore a 16 bit sui dispositivi con poca memoria.
+//
+// Dimezza la memoria che una foto occupa sul televisore, ma nelle zone
+// piatte — cieli, pareti, pelle — i valori saltano di otto livelli alla
+// volta e compaiono le bande. Misurato sullo schermo di produzione: nelle
+// aree uniformi restavano due soli livelli distinti per canale. Su una
+// vetrina fotografica è un difetto che si vede, quindi di serie è spento;
+// si accende solo se un dispositivo davvero non regge il colore pieno.
+function tv_low_color(): bool
+{
+    return setting_get('tv_low_color') === '1';
+}
+
 // Impronta delle impostazioni correnti. Entra nel nome del file della
 // copia: cambiando qualità o dimensione il nome cambia, quindi le copie
 // vecchie non vengono scambiate per buone e le nuove non si sovrappongono

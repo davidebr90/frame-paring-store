@@ -79,6 +79,15 @@ class PlayerController(
         const val BOUNDARY_SNAP_MS = 600L
     }
 
+    // Colore a 16 bit sui dispositivi con poca memoria: dimezza la memoria
+    // di ogni foto, ma nelle zone piatte (cieli, pareti, pelle) i valori
+    // saltano di otto livelli alla volta e si vedono le bande. Su questo
+    // impianto si vedevano eccome, ed è una vetrina fotografica: il
+    // risparmio non vale il difetto, quindi di serie è SPENTO e lo si
+    // riaccende dal CMS solo se un dispositivo davvero non ce la fa.
+    // Impostato da MainActivity a ogni playlist.
+    @Volatile var lowColorAllowed = false
+
     private val handler = Handler(Looper.getMainLooper())
     private val players = arrayOfNulls<ExoPlayer>(2)
     private val playerListeners = arrayOfNulls<Player.Listener>(2)
@@ -543,10 +552,11 @@ class PlayerController(
             inSampleSize = sample
             // 565 dimezza la memoria di ogni foto (due byte per pixel
             // invece di quattro). Non ha canale alpha, quindi vale solo
-            // dove la trasparenza non può esserci — un JPEG — e solo sui
-            // dispositivi che hanno davvero bisogno di questo risparmio,
-            // perché su gradienti ampi 565 può mostrare striature.
-            if (allowLowColor && lowMemoryDevice) {
+            // dove la trasparenza non può esserci — un JPEG — e solo se
+            // l'amministratore lo ha chiesto dal CMS: su una vetrina
+            // fotografica le bande che produce nelle zone piatte si
+            // vedono, e la memoria risparmiata non le ripaga.
+            if (allowLowColor && lowColorAllowed && lowMemoryDevice) {
                 inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
             }
         }

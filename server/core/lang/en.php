@@ -1124,6 +1124,13 @@ return [
     'img.regenerate'         => 'Continue rebuilding',
     'img.all_done'           => 'Every image has an up-to-date copy.',
     'img.no_gd'              => 'This hosting has no GD library: copies cannot be generated and originals are sent to the screens.',
+    'img.card_color'         => 'Colour on the screens',
+    'img.hint_color'         => 'This is about how the screen decodes images, not how the server prepares them: changing it rebuilds nothing. The saving halves the memory a photo takes on the device, but in flat areas — skies, walls, skin — gradients move in steps and banding shows. On a photographic display it is better left off, and turned on only if a device cannot cope with full colour.',
+    'img.low_color'          => 'Save memory on weak devices',
+    'img.low_color_on'       => 'on: less memory, banding in gradients',
+    'img.low_color_off'      => 'off: full colour',
+    'img.color_save'         => 'Save the colour choice',
+    'img.color_saved'        => 'Colour choice saved: screens apply it at their next check, within a minute.',
     'img.err_quality'        => 'The quality level must be between :min and :max.',
     'img.err_side'           => 'The longest side must be between :min and :max pixels.',
 ];

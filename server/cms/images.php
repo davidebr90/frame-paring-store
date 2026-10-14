@@ -27,7 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $do = (string) ($_POST['do'] ?? '');
 
-    if ($do === 'save') {
+    if ($do === 'color') {
+        // Interruttore a parte: non tocca le copie sul server, cambia solo
+        // come le TV le decodificano, quindi non serve rigenerare nulla
+        setting_set('tv_low_color', isset($_POST['tv_low_color']) ? '1' : '0');
+        flash_set('ok', t('img.color_saved'));
+        redirect('images.php');
+    } elseif ($do === 'save') {
         $quality = (int) ($_POST['rendition_quality'] ?? RENDITION_QUALITY_DEFAULT);
         $maxSide = (int) ($_POST['rendition_max_side'] ?? RENDITION_MAX_SIDE_DEFAULT);
 
@@ -138,6 +144,28 @@ cms_header(t('img.title'), 'images');
     <button class="btn btn-primary" type="submit"><?= e(t('img.save')) ?></button>
   </div>
 </form>
+
+<div class="card">
+  <h2><?= e(t('img.card_color')) ?></h2>
+  <p class="hint"><?= e(t('img.hint_color')) ?></p>
+  <form method="post">
+    <?= csrf_field() ?>
+    <input type="hidden" name="do" value="color">
+    <div class="field">
+      <label class="switch" for="tv_low_color">
+        <input type="checkbox" id="tv_low_color" name="tv_low_color" value="1"<?= tv_low_color() ? ' checked' : '' ?> data-switch>
+        <span class="switch-track"></span>
+        <span class="switch-label">
+          <span><?= e(t('img.low_color')) ?></span>
+          <span class="switch-state" data-switch-state
+                data-on="<?= e(t('img.low_color_on')) ?>" data-off="<?= e(t('img.low_color_off')) ?>"><?=
+            e(tv_low_color() ? t('img.low_color_on') : t('img.low_color_off')) ?></span>
+        </span>
+      </label>
+    </div>
+    <button class="btn" type="submit"><?= e(t('img.color_save')) ?></button>
+  </form>
+</div>
 
 <div class="card">
   <h2><?= e(t('img.card_state')) ?></h2>

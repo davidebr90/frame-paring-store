@@ -213,6 +213,11 @@ data class Playlist(
     // senso orario): serve solo a far atterrare la sovraimpressione sul lato
     // giusto. Le gallerie non c'entrano, hanno una rotazione propria per file.
     val screenRotation: Int = 0,
+    // Permesso di usare il colore a 16 bit sui dispositivi con poca memoria
+    // (vedi PlayerController.lowColorAllowed). Spento salvo richiesta
+    // esplicita dal CMS: dimezza la memoria ma lascia bande nelle zone
+    // piatte delle fotografie.
+    val lowColor: Boolean = false,
 ) {
     fun isActiveAt(dayOfWeek: Int, minuteOfDay: Int): Boolean =
         scheduleBands.isEmpty() || scheduleBands.any { it.contains(dayOfWeek, minuteOfDay) }
@@ -285,6 +290,9 @@ data class Playlist(
                 screenRotation = root.optJSONObject("screen")
                     ?.optInt("rotation", 0)
                     ?.takeIf { it == 90 || it == 180 || it == 270 } ?: 0,
+                // Assente nelle playlist di server precedenti la 1.15.0:
+                // in quel caso vale false, cioè colore pieno
+                lowColor = root.optJSONObject("playback")?.optBoolean("low_color", false) ?: false,
             )
         }
     }

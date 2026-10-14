@@ -4,6 +4,40 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.15.0] — 2026-10-14
+
+### Corretto
+
+- **Le bande nelle sfumature erano il colore a 16 bit, non la
+  compressione.** La 1.13.0 aveva introdotto la decodifica a due byte per
+  pixel invece di quattro «sui dispositivi con poca memoria», definiti come
+  quelli che concedono all'app 96 MB o meno. Il Fire TV Stick in produzione
+  ne dichiara esattamente 96, quindi rientrava nella regola. Misurato sullo
+  schermo reale: nelle zone uniformi — cieli, pareti, pelle — restavano
+  **due soli livelli distinti per canale**, con salti di otto, cioè bande
+  visibili. Alzare la qualità JPEG nella 1.14.0 non poteva risolverlo,
+  perché il difetto nasceva dopo, al momento della decodifica sul
+  televisore.
+- Il risparmio non ha più ragione di esistere: dopo la 1.13.0 l'app usa 38
+  MB su un dispositivo che ne ha oltre 200 liberi. Il colore pieno ne
+  chiede 55, che restano ampiamente dentro. Dopo la correzione, nella
+  stessa zona: **da 2 a oltre 30 livelli per canale**, con salti di uno.
+
+### Aggiunto
+
+- **Interruttore *Risparmia memoria sui dispositivi deboli*** nella pagina
+  Qualità delle immagini, **spento di serie**. Riguarda come il televisore
+  decodifica, non come il server prepara: accenderlo non rigenera nulla, e
+  serve solo se un dispositivo davvero non regge il colore pieno. La scelta
+  entra nell'impronta della playlist, quindi le TV la applicano al primo
+  controllo invece che al riavvio.
+
+### Aggiornamento
+
+**L'APK va reinstallata**: la scelta sul colore vive nel codice dell'app.
+Si aggiorna in sovrascrittura, senza riassociare lo schermo. Un'app
+precedente ignora il campo nuovo e continua a comportarsi come prima.
+
 ## [1.14.0] — 2026-10-14
 
 La 1.13.0 ha risolto il problema di memoria comprimendo molto le immagini

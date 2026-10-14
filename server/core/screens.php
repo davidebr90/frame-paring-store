@@ -511,6 +511,9 @@ function playlist_version(array $screen): string
             : null),
         // …e la lingua: cambiandola gli schermi devono riscaricare subito
         (string) (setting_get('default_language') ?: LANG_FALLBACK),
+        // …e la scelta sul colore: senza, cambiandola dal pannello le TV
+        // continuerebbero a riprodurre come prima fino al riavvio
+        tv_low_color() ? '1' : '0',
     ]));
 }
 
@@ -632,6 +635,12 @@ function playlist_for_screen(array $screen): array
         'override' => function_exists('override_payload')
             ? override_payload(active_override_for_screen((int) $screen['id']))
             : null,
+        // Come la TV deve riprodurre, al di là di cosa riprodurre.
+        // low_color: permesso di dimezzare la memoria delle foto a scapito
+        // delle sfumature (vedi tv_low_color e PlayerController)
+        'playback' => [
+            'low_color' => tv_low_color(),
+        ],
         // Stessa identica impronta restituita da state.php: è il confronto
         // che permette alla TV di accorgersi di una modifica entro pochi
         // secondi. Due formule diverse non sarebbero mai confrontabili.

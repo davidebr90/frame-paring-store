@@ -945,6 +945,10 @@ class MainActivity : Activity() {
 
     // Applica lo stato di programmazione corrente. Ritorna true se in fascia.
     private fun applySchedule(playlist: Playlist, force: Boolean): Boolean {
+        // Scelta di colore decisa nel CMS: va applicata PRIMA che il player
+        // decodifichi qualsiasi cosa, altrimenti varrebbe solo dalla foto
+        // successiva (vedi PlayerController.lowColorAllowed)
+        playerController.lowColorAllowed = playlist.lowColor
         // Durante una diretta il programma ordinario resta sospeso
         if (activeOverrideId != null) {
             return false
