@@ -195,12 +195,24 @@ function rendition_memory_budget(): int
 // altro, non tocca il database — così è verificabile da sola.
 // Ritorna ['filename' => .., 'filesize' => .., 'checksum' => .., 'width' => ..,
 // 'height' => ..] oppure null se la copia non serve o non è possibile.
-function rendition_build(string $srcPath, string $mime, string $destDir, string $destName): ?array
-{
+// $esito dice PERCHÉ non è stata prodotta una copia, e la differenza
+// conta: "non serve" (immagine già a misura) significa che l'originale va
+// benissimo e un'eventuale copia vecchia va dimenticata; "errore" (GD
+// assente, memoria insufficiente, file illeggibile) significa che una
+// copia vecchia, se c'è, è ancora la cosa migliore da consegnare.
+function rendition_build(
+    string $srcPath,
+    string $mime,
+    string $destDir,
+    string $destName,
+    ?string &$esito = null,
+): ?array {
+    $esito = 'errore';
     if (!rendition_available() || !is_file($srcPath)) {
         return null;
     }
     if (!in_array($mime, RENDITION_SOURCE_MIME, true)) {
+        $esito = 'non_serve'; // formato che non trattiamo: va bene l'originale
         return null;
     }
 
@@ -218,6 +230,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
     $maxSide = rendition_max_side();
     $longSide = max($width, $height);
     if ($longSide <= $maxSide && filesize($srcPath) < RENDITION_MIN_SOURCE_BYTES) {
+        $esito = 'non_serve';
         return null;
     }
 
@@ -296,6 +309,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
             : $outBytes > $sourceBytes * (1 - RENDITION_MIN_GAIN);
         if ($tooBig) {
             @unlink($tmpPath);
+            $esito = 'non_serve'; // l'originale è già la scelta migliore
             return null;
         }
 
@@ -305,6 +319,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
             return null;
         }
 
+        $esito = 'ok';
         return [
             'filename' => $outName,
             'filesize' => (int) filesize($outPath),
@@ -353,12 +368,14 @@ function media_ensure_rendition(array $media, bool $ignoraBudget = false): array
 
     $filename = basename((string) $media['filename']);
     $result = null;
+    $esito = 'errore';
     try {
         $result = rendition_build(
             UPLOADS_DIR . '/' . $filename,
             (string) $media['mime_type'],
             UPLOADS_DIR,
             $filename,
+            $esito,
         );
     } catch (Throwable $e) {
         // Una copia che non si riesce a fare non deve mai impedire a uno
@@ -368,12 +385,19 @@ function media_ensure_rendition(array $media, bool $ignoraBudget = false): array
             . (int) $media['id'] . ': ' . $e->getMessage());
     }
 
-    // Tentativo fallito, ma una copia buona c'era già (rigenerazione dopo
+    // Tentativo FALLITO, ma una copia buona c'era già (rigenerazione dopo
     // un cambio di impostazioni): si tiene quella invece di buttarla e
     // ritrovarsi a consegnare l'originale al suo posto. Si segna comunque
     // il tentativo, così non si riprova a ogni polling.
+    //
+    // Quando invece la copia semplicemente NON SERVE (immagine già entro
+    // le dimensioni scelte), la vecchia va dimenticata: tenerla vorrebbe
+    // dire continuare a servire una riduzione fatta con impostazioni che
+    // l'amministratore ha cambiato, ed è esattamente il contrario di
+    // quello che ha chiesto muovendo i cursori.
     $vecchia = $media['rendition_filename'] ?? null;
     $tieniVecchia = $result === null
+        && $esito === 'errore'
         && $vecchia !== null
         && is_file(UPLOADS_DIR . '/' . basename((string) $vecchia));
 

@@ -4,6 +4,29 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.15.1] — 2026-10-14
+
+### Corretto
+
+- **I cursori della qualità non avevano alcun effetto.** Le impostazioni
+  si leggono da una cache caricata una volta per richiesta, e il
+  salvataggio non la aggiornava: per il resto di quella richiesta il
+  codice continuava a vedere il valore precedente. Quasi ovunque il
+  difetto non si notava, perché le altre pagine salvano e poi rimandano il
+  browser a ricaricare; la pagina Qualità delle immagini invece salva e
+  **subito** rigenera le copie, e le rigenerava con la qualità vecchia,
+  producendo file identici a quelli di prima. Da fuori sembrava che
+  muovere i cursori non servisse a nulla. Riguardava tutte le
+  impostazioni del pannello, non solo le immagini.
+- **Una copia non più necessaria veniva tenuta al posto dell'originale.**
+  La 1.14.0 conservava la copia precedente quando la rigenerazione non ne
+  produceva una nuova, per non ritrovarsi a consegnare un originale da
+  venti megabyte. Ma quel caso comprendeva anche le immagini già entro le
+  dimensioni scelte, per cui una copia semplicemente non serve: restavano
+  così legate a una riduzione fatta con impostazioni che l'amministratore
+  aveva cambiato. Ora si distingue un fallimento, dove la copia vecchia è
+  ancora la cosa migliore, da un "non serve", dove va dimenticata.
+
 ## [1.15.0] — 2026-10-14
 
 ### Corretto

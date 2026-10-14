@@ -5,7 +5,12 @@ declare(strict_types=1);
 // finché non si svuota il cestino o non scade la retention configurata.
 // I file su disco vengono rimossi SOLO alla cancellazione definitiva.
 
-function setting_get(string $key, ?string $default = null): ?string
+// Le impostazioni si leggono una volta sola per richiesta: sono poche
+// decine di righe interrogate da quasi ogni pagina. La cache sta qui, in
+// un punto solo, perché scrittura e lettura DEVONO vederla uguale: una
+// setting_set seguita da una setting_get dentro la stessa richiesta deve
+// restituire il valore appena salvato.
+function &settings_cache(): array
 {
     static $cache = null;
     if ($cache === null) {
@@ -14,6 +19,12 @@ function setting_get(string $key, ?string $default = null): ?string
             $cache[$row['key']] = $row['value'];
         }
     }
+    return $cache;
+}
+
+function setting_get(string $key, ?string $default = null): ?string
+{
+    $cache = &settings_cache();
     return $cache[$key] ?? $default;
 }
 
@@ -22,6 +33,16 @@ function setting_set(string $key, ?string $value): void
     db()->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?)
                    ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)')
         ->execute([$key, $value]);
+
+    // Senza questa riga il valore nuovo esiste nel database ma non per il
+    // resto della richiesta che lo ha appena scritto. È un difetto che si
+    // notava a malapena altrove, perché quasi tutte le pagine salvano e
+    // poi rimandano il browser a ricaricare; qui no: la pagina Qualità
+    // delle immagini salva e SUBITO rigenera le copie, e le rigenerava
+    // con la qualità precedente, producendo file identici a quelli di
+    // prima. Da fuori sembrava che il cursore non servisse a nulla.
+    $cache = &settings_cache();
+    $cache[$key] = $value;
 }
 
 // Sposta un media nel cestino (resta su disco)
