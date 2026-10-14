@@ -37,13 +37,44 @@ declare(strict_types=1);
 // (vedi effective_item_rotation e screen_media_overrides). La riduzione
 // di peso non deve spostare un solo pixel di ciò che si vede.
 
-// Lato lungo della copia: un pannello full HD, anche montato in verticale,
-// non mostra più di 1920 pixel sul proprio lato maggiore.
-const RENDITION_MAX_SIDE = 1920;
+// Lato lungo della copia. 1920 copre un pannello full HD anche montato in
+// verticale; si alza solo per pannelli più grandi, perché ogni pixel in
+// più è memoria che il dispositivo deve tenere decompressa.
+const RENDITION_MAX_SIDE_DEFAULT = 1920;
+const RENDITION_MAX_SIDE_MIN = 1280;
+const RENDITION_MAX_SIDE_MAX = 3840;
 
-// 82: la soglia oltre la quale, su una foto, si aggiungono byte senza che
-// si veda differenza a distanza di visione da vetrina.
-const RENDITION_JPEG_QUALITY = 82;
+// Qualità JPEG della copia. 90 è il punto in cui su una foto gli artefatti
+// di compressione smettono di vedersi: la 1.13.0 usava 82, che su fotografie
+// con pelle e cieli scendeva sotto un bit per pixel e si notava a schermo.
+// Sotto 70 la perdita è evidente ovunque, sopra 97 si aggiungono byte senza
+// che nessuno veda la differenza.
+const RENDITION_QUALITY_DEFAULT = 90;
+const RENDITION_QUALITY_MIN = 70;
+const RENDITION_QUALITY_MAX = 97;
+
+// Lato lungo scelto nelle impostazioni del CMS, entro i limiti sopra.
+function rendition_max_side(): int
+{
+    $v = (int) (setting_get('rendition_max_side') ?: RENDITION_MAX_SIDE_DEFAULT);
+    return max(RENDITION_MAX_SIDE_MIN, min(RENDITION_MAX_SIDE_MAX, $v));
+}
+
+// Qualità scelta nelle impostazioni del CMS, entro i limiti sopra.
+function rendition_quality(): int
+{
+    $v = (int) (setting_get('rendition_quality') ?: RENDITION_QUALITY_DEFAULT);
+    return max(RENDITION_QUALITY_MIN, min(RENDITION_QUALITY_MAX, $v));
+}
+
+// Impronta delle impostazioni correnti. Entra nel nome del file della
+// copia: cambiando qualità o dimensione il nome cambia, quindi le copie
+// vecchie non vengono scambiate per buone e le nuove non si sovrappongono
+// a quelle ancora in uso da una TV che non ha ancora aggiornato.
+function rendition_profile(): string
+{
+    return 'r' . rendition_max_side() . 'q' . rendition_quality();
+}
 
 // Sotto questo peso l'originale è già adattissimo: una copia porterebbe
 // solo un file in più da gestire. Vale anche per le immagini di sistema.
@@ -124,7 +155,7 @@ function rendition_select_fields(string $alias = 'm'): string
 function rendition_filename_for(string $originalFilename, string $ext): string
 {
     $base = pathinfo($originalFilename, PATHINFO_FILENAME);
-    return $base . '-r' . RENDITION_MAX_SIDE . '.' . $ext;
+    return $base . '-' . rendition_profile() . '.' . $ext;
 }
 
 // Quanta memoria PHP resta, in byte. Decomprimere una foto molto grande
@@ -171,14 +202,15 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
 
     // Già piccola: ingrandirla sarebbe un danno, ricomprimerla un costo
     // senza guadagno
+    $maxSide = rendition_max_side();
     $longSide = max($width, $height);
-    if ($longSide <= RENDITION_MAX_SIDE && filesize($srcPath) < RENDITION_MIN_SOURCE_BYTES) {
+    if ($longSide <= $maxSide && filesize($srcPath) < RENDITION_MIN_SOURCE_BYTES) {
         return null;
     }
 
     // Sorgente + destinazione decompresse devono entrarci comodamente:
     // 4 byte per pixel, più un margine per il resto della richiesta
-    $needed = ($width * $height * 4) + (RENDITION_MAX_SIDE * RENDITION_MAX_SIDE * 4);
+    $needed = ($width * $height * 4) + ($maxSide * $maxSide * 4);
     if ($needed > rendition_memory_budget() * 0.7) {
         error_log("Frame Paring: copia di riproduzione saltata per memoria insufficiente ($srcPath)");
         return null;
@@ -197,7 +229,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
 
     try {
         // Scala mantenendo le proporzioni; mai oltre l'originale
-        $scale = min(1.0, RENDITION_MAX_SIDE / $longSide);
+        $scale = min(1.0, $maxSide / $longSide);
         $newWidth = max(1, (int) round($width * $scale));
         $newHeight = max(1, (int) round($height * $scale));
 
@@ -229,7 +261,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
         $tmpPath = $outPath . '.part';
         $ok = $keepAlpha
             ? @imagepng($dst, $tmpPath, 6)
-            : @imagejpeg($dst, $tmpPath, RENDITION_JPEG_QUALITY);
+            : @imagejpeg($dst, $tmpPath, rendition_quality());
         imagedestroy($dst);
 
         if (!$ok || !is_file($tmpPath)) {
@@ -281,7 +313,7 @@ function rendition_build(string $srcPath, string $mime, string $destDir, string 
 // I media caricati prima della 1.13.0 passano di qui la prima volta che
 // una playlist li nomina: stessa pulizia opportunistica già usata da
 // media_ensure_dimensions(), nessuna migrazione a parte da lanciare.
-function media_ensure_rendition(array $media): array
+function media_ensure_rendition(array $media, bool $ignoraBudget = false): array
 {
     if (($media['type'] ?? '') !== 'image') {
         return $media;
@@ -295,12 +327,16 @@ function media_ensure_rendition(array $media): array
         return $media; // già tentata: che sia riuscita o no, non si ripete
     }
 
-    // Tetto per richiesta: vedi RENDITION_MAX_PER_REQUEST
+    // Tetto per richiesta: vedi RENDITION_MAX_PER_REQUEST. La rigenerazione
+    // in blocco dalle impostazioni lo scavalca, perché lì il tempo se lo
+    // gestisce da sé e nessuna TV sta aspettando quella risposta.
     static $fatte = 0;
-    if ($fatte >= RENDITION_MAX_PER_REQUEST) {
-        return $media;
+    if (!$ignoraBudget) {
+        if ($fatte >= RENDITION_MAX_PER_REQUEST) {
+            return $media;
+        }
+        $fatte++;
     }
-    $fatte++;
 
     $filename = basename((string) $media['filename']);
     $result = null;
@@ -319,7 +355,22 @@ function media_ensure_rendition(array $media): array
             . (int) $media['id'] . ': ' . $e->getMessage());
     }
 
+    // Tentativo fallito, ma una copia buona c'era già (rigenerazione dopo
+    // un cambio di impostazioni): si tiene quella invece di buttarla e
+    // ritrovarsi a consegnare l'originale al suo posto. Si segna comunque
+    // il tentativo, così non si riprova a ogni polling.
+    $vecchia = $media['rendition_filename'] ?? null;
+    $tieniVecchia = $result === null
+        && $vecchia !== null
+        && is_file(UPLOADS_DIR . '/' . basename((string) $vecchia));
+
     try {
+        if ($tieniVecchia) {
+            db()->prepare('UPDATE media SET rendition_at = NOW() WHERE id = ?')
+                ->execute([(int) $media['id']]);
+            $media['rendition_at'] = date('Y-m-d H:i:s');
+            return $media;
+        }
         db()->prepare('UPDATE media
                        SET rendition_filename = ?, rendition_filesize = ?,
                            rendition_checksum = ?, rendition_at = NOW()
@@ -365,6 +416,119 @@ function media_delivery(array $media): array
         'filesize' => (int) $media['filesize'],
         'checksum' => (string) $media['checksum'],
         'mime'     => (string) $media['mime_type'],
+    ];
+}
+
+// ---------- rigenerazione dopo un cambio di impostazioni ----------
+
+// Segna tutte le copie come da rifare, SENZA cancellarle.
+//
+// La differenza è tutt'altro che formale. Cancellandole subito, ogni
+// immagine ancora senza copia nuova tornerebbe a essere consegnata nel
+// suo originale: su questo impianto significherebbe spedire a un Fire
+// Stick venti megabyte al posto di trecento kilobyte, cioè riportarlo
+// esattamente nelle condizioni di memoria che la 1.13.0 ha risolto, per
+// tutta la durata della rigenerazione. Il nome del file porta qualità e
+// dimensione (vedi rendition_profile), quindi la copia vecchia e quella
+// nuova possono convivere: la vecchia continua a servire i televisori
+// finché la nuova non è pronta, e sparisce solo dopo.
+function rendition_invalidate_all(): int
+{
+    if (!rendition_columns_available()) {
+        return 0;
+    }
+    $n = (int) db()->query("SELECT COUNT(*) FROM media
+                             WHERE type = 'image' AND deleted_at IS NULL
+                               AND rendition_at IS NOT NULL")->fetchColumn();
+    db()->exec("UPDATE media SET rendition_at = NULL
+                 WHERE type = 'image' AND deleted_at IS NULL");
+    return $n;
+}
+
+// Elimina i file delle copie che non sono più nominati da nessun media:
+// restano dopo un cambio di impostazioni, quando ogni immagine è passata
+// a una copia con un nome nuovo. Si chiama a rigenerazione finita.
+function rendition_cleanup_orphans(): int
+{
+    if (!rendition_columns_available()) {
+        return 0;
+    }
+    $inUso = [];
+    foreach (db()->query('SELECT rendition_filename FROM media
+                          WHERE rendition_filename IS NOT NULL') as $r) {
+        $inUso[basename((string) $r['rendition_filename'])] = true;
+    }
+    $tolti = 0;
+    foreach (glob(UPLOADS_DIR . '/*-r[0-9]*') ?: [] as $path) {
+        if (!isset($inUso[basename($path)]) && @unlink($path)) {
+            $tolti++;
+        }
+    }
+    return $tolti;
+}
+
+// Quante immagini attendono ancora la propria copia.
+function rendition_pending_count(): int
+{
+    if (!rendition_columns_available()) {
+        return 0;
+    }
+    return (int) db()->query("SELECT COUNT(*) FROM media
+                               WHERE type = 'image' AND deleted_at IS NULL
+                                 AND rendition_at IS NULL")->fetchColumn();
+}
+
+// Rigenera le copie mancanti finché resta tempo. Il tetto è in secondi,
+// non in numero di file: una foto da trenta megapixel e una da tre non
+// costano uguale, e quello che non si può superare è il tempo massimo di
+// esecuzione dell'hosting. Quel che resta lo finisce il recupero
+// ordinario, due per volta, mentre le TV chiedono le loro playlist.
+function rendition_regenerate_batch(int $maxSeconds = 20): array
+{
+    $inizio = microtime(true);
+    $fatte = 0;
+    if (!rendition_columns_available()) {
+        return ['fatte' => 0, 'restanti' => 0];
+    }
+    $righe = db()->query("SELECT * FROM media
+                           WHERE type = 'image' AND deleted_at IS NULL
+                             AND rendition_at IS NULL
+                           ORDER BY id")->fetchAll();
+    foreach ($righe as $riga) {
+        if (microtime(true) - $inizio > $maxSeconds) {
+            break;
+        }
+        media_ensure_rendition($riga, ignoraBudget: true);
+        $fatte++;
+    }
+    $restanti = rendition_pending_count();
+    // Finita la rigenerazione, le copie del profilo precedente non le
+    // nomina più nessuno: si possono togliere di mezzo
+    if ($restanti === 0) {
+        rendition_cleanup_orphans();
+    }
+    return ['fatte' => $fatte, 'restanti' => $restanti];
+}
+
+// Quanto pesano, in tutto, originali e copie: è il numero che dice se una
+// scelta di qualità è sostenibile per lo spazio dell'hosting e per la
+// banda che le TV scaricheranno.
+function rendition_storage_summary(): array
+{
+    $out = ['originali' => 0, 'copie' => 0, 'con_copia' => 0, 'immagini' => 0];
+    if (!rendition_columns_available()) {
+        return $out;
+    }
+    $r = db()->query("SELECT COUNT(*) AS n,
+                             COALESCE(SUM(filesize), 0) AS orig,
+                             COALESCE(SUM(rendition_filesize), 0) AS cop,
+                             SUM(rendition_filename IS NOT NULL) AS conCopia
+                        FROM media WHERE type = 'image' AND deleted_at IS NULL")->fetch();
+    return [
+        'immagini'  => (int) $r['n'],
+        'originali' => (int) $r['orig'],
+        'copie'     => (int) $r['cop'],
+        'con_copia' => (int) $r['conCopia'],
     ];
 }
 

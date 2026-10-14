@@ -297,6 +297,7 @@ function cms_header(string $title, string $active = ''): void
             'items' => [
                 ['key' => 'branding',     'href' => 'branding.php',     'label' => t('nav.branding'), 'cap' => 'settings.manage'],
                 ['key' => 'overlay',      'href' => 'overlay.php',      'label' => t('nav.overlay'),  'cap' => 'settings.manage'],
+                ['key' => 'images',       'href' => 'images.php',       'label' => t('nav.images'),   'cap' => 'settings.manage'],
                 ['key' => 'mail',         'href' => 'mail.php',         'label' => t('nav.mail'),     'cap' => 'settings.manage'],
                 ['key' => 'capabilities', 'href' => 'capabilities.php', 'label' => t('nav.capabilities'),          'cap' => 'settings.manage'],
                 ['key' => 'maintenance',  'href' => 'maintenance.php',  'label' => t('nav.maintenance'),      'cap' => 'settings.manage'],

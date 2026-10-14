@@ -4,6 +4,49 @@ Tutte le modifiche rilevanti del progetto.
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e la
 numerazione [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.14.0] — 2026-10-14
+
+La 1.13.0 ha risolto il problema di memoria comprimendo molto le immagini
+inviate ai televisori. Troppo: misurato sulle foto in produzione, le copie
+stavano a **0,99 bit per pixel**, sotto la soglia in cui su una fotografia
+si vedono aloni attorno ai contorni e sfumature a gradini su pelle e cieli.
+La qualità era fissata nel codice a 82 e nessuno poteva cambiarla.
+
+### Aggiunto
+
+- **Pagina *Qualità delle immagini*** in Sistema, con due cursori: livello
+  di compressione (da 70 a 97) e lato più lungo della copia (da 1280 a 3840
+  pixel). Ogni posizione dice a parole cosa significa, e accanto compare la
+  stima del peso del file e della memoria che il televisore dovrà usare
+  mentre quella foto è a schermo.
+- La scheda mostra lo stato reale: quante immagini hanno la copia pronta,
+  quanto spazio occupano originali e copie, il peso medio di una copia.
+- **Qualità predefinita portata da 82 a 90.** Chi aggiorna si ritrova le
+  copie rigenerate a 90 senza dover toccare nulla.
+- Il nome del file della copia porta ora qualità e dimensione
+  (`-r1920q90`), quindi copie con impostazioni diverse possono convivere.
+
+### Corretto
+
+- **Rigenerare le copie non deve far tornare indietro la memoria.**
+  Cancellando subito le copie vecchie, ogni immagine non ancora rifatta
+  sarebbe tornata a essere consegnata nel suo originale: su un Fire Stick
+  significa spedire venti megabyte al posto di trecento kilobyte, cioè
+  ricreare per tutta la durata della rigenerazione le condizioni che la
+  1.13.0 aveva risolto. La copia vecchia resta quindi al suo posto e
+  continua a servire i televisori finché la nuova non è pronta; i file
+  rimasti senza padrone si rimuovono solo a lavoro finito.
+- Se la rigenerazione di una copia fallisce ma ne esisteva già una buona,
+  si tiene quella invece di ritrovarsi a consegnare l'originale.
+
+### Nota sull'app
+
+**Nessuna modifica al codice dell'app**: la 1.14.0 è interamente lato
+server. Il numero di versione è stato allineato come vuole la convenzione
+del progetto, ma **non serve ricompilare né reinstallare l'APK**. La
+memoria richiesta al televisore non cambia, perché dipende dai pixel e non
+da quanto il file è compresso: solo il download diventa un po' più pesante.
+
 ## [1.13.0] — 2026-09-21
 
 Riduzione della memoria richiesta al dispositivo, da entrambi i lati. Il
